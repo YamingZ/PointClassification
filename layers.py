@@ -28,8 +28,8 @@ def batch_norm(inputs,offset,scale,is_training,moving_decay=0.9,eps=1e-5):
         with tf.control_dependencies([ema_apply_op]):
             return tf.identity(batch_mean), tf.identity(batch_var)
     # 训练时，更新均值与方差，测试时使用之前最后一次保存的均值与方差
-    mean, var = tf.cond(is_training,mean_var_with_update,
-            lambda:(ema.average(batch_mean),ema.average(batch_var)))
+    # with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+    mean, var = tf.cond(is_training,mean_var_with_update,lambda:(ema.average(batch_mean),ema.average(batch_var)))
     # 最后执行batch normalization
     return tf.nn.batch_normalization(inputs,mean,var,offset,scale,eps)
 
@@ -208,21 +208,25 @@ class Dense(Layer):
 
         self.input_reshape = input_reshape
         self.input_dim = input_dim
+        self.output_dim = output_dim
 
         #initialized variable
-        with tf.variable_scope(self.name + '_vars'):
-            self.vars['weights'] = tf.get_variable('weights',[input_dim,output_dim],
-                                                   initializer=tf.glorot_uniform_initializer())
-            if self.bias:
-                self.vars['bias'] = tf.get_variable('bias',[output_dim],
-                                                    initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.05))
-            if self.bn:
-                with tf.variable_scope(self.name + '_bn_vars'):
-                    self.vars['offset'] = tf.get_variable('offset', [output_dim],initializer=tf.constant_initializer(0))
-                    self.vars['scale'] = tf.get_variable('scale', [output_dim],initializer=tf.constant_initializer(1))
+        self.initVariable()
 
         if self.logging:
             self._log_vars()
+
+    def initVariable(self):
+        with tf.variable_scope(self.name + '_vars'):
+            self.vars['weights'] = tf.get_variable('weights',[self.input_dim,self.output_dim],
+                                                   initializer=tf.glorot_uniform_initializer())
+            if self.bias:
+                self.vars['bias'] = tf.get_variable('bias',[self.output_dim],
+                                                    initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.05))
+            if self.bn:
+                with tf.variable_scope(self.name + '_bn_vars'):
+                    self.vars['offset'] = tf.get_variable('offset', [self.output_dim],initializer=tf.constant_initializer(0))
+                    self.vars['scale'] = tf.get_variable('scale', [self.output_dim],initializer=tf.constant_initializer(1))
 
     def _call(self, inputs):
         if self.input_reshape:
@@ -261,21 +265,25 @@ class Conv2d(Layer):
 
         self.input_reshape = input_reshape
         self.input_dim = input_dim
+        self.output_dim = output_dim
         self.kernel_size = kernel_size
 
         #initialized variable
+        self.initVariable()
+        if self.logging:
+            self._log_vars()
+
+    def initVariable(self):
         with tf.variable_scope(self.name + '_vars'):
-            self.vars['weights'] = tf.get_variable('weights',[kernel_size[0],kernel_size[1],input_dim,output_dim],
+            self.vars['weights'] = tf.get_variable('weights',[self.kernel_size[0],self.kernel_size[1],self.input_dim,self.output_dim],
                                                 initializer=tf.glorot_uniform_initializer())
             if self.bias:
-                self.vars['bias'] = tf.get_variable('bias',[output_dim],
+                self.vars['bias'] = tf.get_variable('bias',[self.output_dim],
                                                 initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.05))
             if self.bn:
                 with tf.variable_scope(self.name + '_bn_vars'):
-                    self.vars['offset'] = tf.get_variable('offset', [output_dim],initializer=tf.constant_initializer(0))
-                    self.vars['scale'] = tf.get_variable('scale', [output_dim],initializer=tf.constant_initializer(1))
-        if self.logging:
-            self._log_vars()
+                    self.vars['offset'] = tf.get_variable('offset', [self.output_dim],initializer=tf.constant_initializer(0))
+                    self.vars['scale'] = tf.get_variable('scale', [self.output_dim],initializer=tf.constant_initializer(1))
 
     def _call(self, inputs):
         if self.input_reshape:

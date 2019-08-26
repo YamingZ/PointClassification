@@ -26,6 +26,9 @@ class TransformDense(Layer):
         return transform
 
 class STN(object):
+    # class variable
+    global_variable_scope = None
+
     def __init__(self,transform_dim,is_training=True,**kwargs):
         allowed_kwargs = {'name', 'logging'}
         for kwarg in kwargs.keys():
@@ -33,7 +36,10 @@ class STN(object):
         name = kwargs.get('name')
         if not name:
             block = self.__class__.__name__.lower()
-            name = block + '_' + str(get_layer_uid(block))
+            if STN.global_variable_scope == tf.get_variable_scope():
+                name = block + '_' + str(get_layer_uid(block))
+            else:
+                name = block
         self.name = name
         self.logging = kwargs.get('logging', False)
         self.block = []
@@ -44,6 +50,8 @@ class STN(object):
 
         with tf.variable_scope(self.name + '_var'):
             self._build()
+
+        STN.global_variable_scope = tf.get_variable_scope()
 
     def _build(self):
         self.block.append(Conv2d(input_dim=1,
@@ -116,7 +124,7 @@ class STN(object):
 
     def _call(self, inputs):
         inputs_r = inputs[:,:,0:1]
-        inputs_angle = inputs[:, :, 1:3]
+        inputs_angle = inputs[:, :, 1:]
         inputs_angle_theta = inputs[:, :, 1:2]
         inputs_angle_phi = inputs[:, :, 2:3]
         self.activations.append(inputs_angle)

@@ -33,29 +33,29 @@ class Model(object):
 
     def build(self):
         """ Wrapper for _build() """
-        with tf.variable_scope(self.name+'_var'):
+        with tf.variable_scope(self.name+'_var',reuse=tf.AUTO_REUSE):
             self._build()
 
-        # Build sequential layer model
-        self.activations.append(self.inputs)
-        for layer in self.layers:
-            hidden = layer(self.activations[-1])
-            self.activations.append(hidden)
-        self.outputs = self.activations[-1]
+            # Build sequential layer model
+            self.activations.append(self.inputs)
+            for layer in self.layers:
+                hidden = layer(self.activations[-1])
+                self.activations.append(hidden)
+            self.outputs = self.activations[-1]
 
-        # Build metrics
-        with tf.name_scope("Loss"):
-            self._loss()
-        with tf.name_scope("Accuracy"):
-            self._accuracy()
-        with tf.name_scope("Optimizer"):
-            self._optimizer()
+            # Build metrics
+            with tf.name_scope("Loss"):
+                self._loss()
+            with tf.name_scope("Accuracy"):
+                self._accuracy()
+            with tf.name_scope("Optimizer"):
+                self._optimizer()
 
-        # Store model variables for easy access
-        variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-        self.vars = {var.name: var for var in variables}
+            # Store model variables for easy access
+            variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+            self.vars = {var.name: var for var in variables}
 
-        self.summary = tf.summary.merge_all()
+            self.summary = tf.summary.merge_all()
 
     def _loss(self):
         raise NotImplementedError
@@ -86,9 +86,23 @@ class GPN(Model):
     def __init__(self,para,placeholders,**kwargs):
         super(GPN,self).__init__(**kwargs)
         self.para = para
-        self.placeholders = placeholders
-        self.inputs = placeholders['coordinate']
         self.is_training = placeholders['isTraining']
+        self.batch_size = placeholders['batch_size']
+        # signal training device
+        if self.para.GpuNums == 1:
+            self.inputs = placeholders['coordinate']
+            self.other_inputs = placeholders
+            self.build()
+
+    def dataInput(self,coordinate,label,weights,graph_1,graph_2,graph_3,batch_index_l1,batch_index_l2):
+        self.inputs = coordinate
+        self.other_inputs = {'label': label,
+                             'weights': weights,
+                             'graph_1': graph_1,
+                             'graph_2': graph_2,
+                             'graph_3': graph_3,
+                             'batch_index_l1': batch_index_l1,
+                             'batch_index_l2': batch_index_l2}
         self.build()
 
     def tower_loss(self,scope):
@@ -113,8 +127,8 @@ class GPN(Model):
         #     mat_diff_loss = tf.nn.l2_loss(mat_diff) * self.para.tmat_rate
         # tf.summary.scalar('TMat_loss', mat_diff_loss)
         with tf.name_scope('Loss'):
-            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.outputs, labels=self.placeholders['label'])
-            loss = tf.multiply(loss, self.placeholders['weights'])
+            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.outputs, labels=self.other_inputs['label'])
+            loss = tf.multiply(loss, self.other_inputs['weights'])
             loss = tf.reduce_mean(loss)
             self.loss = loss + l2_loss #+ mat_diff_loss
         tf.summary.scalar("loss", self.loss)
@@ -124,12 +138,12 @@ class GPN(Model):
     def _accuracy(self):
         self.probability = tf.nn.softmax(self.outputs)
         self.predictLabels = tf.argmax(self.probability, axis=1) #softmax can be delete
-        correct_prediction = tf.equal(self.predictLabels, tf.argmax(self.placeholders['label'], axis=1))
+        correct_prediction = tf.equal(self.predictLabels, tf.argmax(self.other_inputs['label'], axis=1))
         self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
         tf.summary.scalar("acc", self.accuracy)
 
     def _optimizer(self):
-        self.global_step = tf.get_variable('global_step',initializer=tf.constant(0),trainable=False,)
+        self.global_step = tf.get_variable('global_step',dtype=tf.int32,initializer=tf.constant(0),trainable=False)
         learning_rate = tf.train.exponential_decay(self.para.learningRate,#初始学习率
                                                         self.global_step,#Variable，每batch加一
                                                         self.para.lr_decay_steps,#global_step/decay_steps得到decay_rate的幂指数
@@ -140,11 +154,12 @@ class GPN(Model):
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
         self.opt_op = self.optimizer.minimize(self.loss,global_step=self.global_step)
 
+
     def _build(self):
         # batch_size * point_num * feature_dim * 1
         if(self.para.useSTN):
             self.layers.append(STN(transform_dim=2,is_training=self.is_training,logging=self.logging))  #STN layer
-        self.layers.append(GraphConv(graph=self.placeholders['graph_1'],
+        self.layers.append(GraphConv(graph=self.other_inputs['graph_1'],
                                      input_dim=self.para.input_data_dim,
                                      output_dim=self.para.gcn_1_filter_n,
                                      pointnumber=self.para.pointNumber,
@@ -157,15 +172,15 @@ class GPN(Model):
                                      )
                            ) # gcn layer 1
         # batch_size * point_num * 1 * feature_dim
-        self.layers.append(GraphMaxPool(batch_index=self.placeholders['batch_index_l1'],
-                                        batch_size=self.placeholders['batch_size'],
+        self.layers.append(GraphMaxPool(batch_index=self.other_inputs['batch_index_l1'],
+                                        batch_size=self.batch_size,
                                         clusterNumber=self.para.clusterNumberL1,
                                         nearestNeighbor=self.para.nearestNeighborL1,
                                         featuredim=self.para.gcn_1_filter_n,
                                         logging=self.logging
                                         )
                            ) # max pooling
-        self.layers.append(GraphConv(graph=self.placeholders['graph_2'],
+        self.layers.append(GraphConv(graph=self.other_inputs['graph_2'],
                                      input_dim=self.para.gcn_1_filter_n,
                                      output_dim=self.para.gcn_2_filter_n,
                                      pointnumber=self.para.clusterNumberL1,
@@ -177,8 +192,8 @@ class GPN(Model):
                                      logging=self.logging
                                      )
                            ) # gcn layer 2
-        self.layers.append(GraphMaxPool(batch_index=self.placeholders['batch_index_l2'],
-                                        batch_size=self.placeholders['batch_size'],
+        self.layers.append(GraphMaxPool(batch_index=self.other_inputs['batch_index_l2'],
+                                        batch_size=self.batch_size,
                                         clusterNumber=self.para.clusterNumberL2,
                                         nearestNeighbor=self.para.nearestNeighborL2,
                                         featuredim=self.para.gcn_2_filter_n,
@@ -186,7 +201,7 @@ class GPN(Model):
                                         )
                            ) # max pooling
 
-        self.layers.append(GraphConv(graph=self.placeholders['graph_3'],
+        self.layers.append(GraphConv(graph=self.other_inputs['graph_3'],
                                      input_dim=self.para.gcn_2_filter_n,
                                      output_dim=self.para.gcn_3_filter_n,
                                      pointnumber=self.para.clusterNumberL2,

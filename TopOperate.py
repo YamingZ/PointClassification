@@ -80,7 +80,7 @@ class TopOperate(object):
                                                              M=self.para.clusterNumberL2)
 
             feed_dict = {self.placeholder['isTraining']: True,
-                         self.placeholder['batch_size']: self.para.batchSize,
+                         self.placeholder['batch_size']: batchSize,
                          self.placeholder['coordinate']: batchSCoor,
                          self.placeholder['label']: batchLabel,
                          self.placeholder['weights']: batchWeight,
@@ -141,8 +141,8 @@ class TopOperate(object):
                                                              batch_size=batchSize,
                                                              M=self.para.clusterNumberL2)
 
-            feed_dict = {self.placeholder['isTraining']:False,
-                         self.placeholder['batch_size']: self.para.evalBatchSize,
+            feed_dict = {self.placeholder['isTraining']: False,
+                         self.placeholder['batch_size']: batchSize,
                          self.placeholder['coordinate']: batchSCoor,
                          self.placeholder['label']: batchLabel,
                          self.placeholder['weights']: batchWeight,
@@ -164,23 +164,24 @@ class TopOperate(object):
 
     def predictOneData(self, data):
         coordinate, graph, label = data[0], data[1], data[2]
+        batchSize = self.para.testBatchSize
         graph = graph.todense()
         coordinate = utils.get_Spherical_coordinate(coordinate)
         IndexL1, centroid_coordinates_1 = utils.farthest_sampling_new(coordinate,
                                                                     M=self.para.clusterNumberL1,
                                                                     k=self.para.nearestNeighborL1,
-                                                                    batch_size=self.para.testBatchSize,
+                                                                    batch_size=batchSize,
                                                                     nodes_n=self.para.pointNumber)
         MiddleGraph_1 = utils.middle_graph_generation(centroid_coordinates_1, batch_size=1, M=self.para.clusterNumberL1)
         IndexL2, centroid_coordinates_2 = utils.farthest_sampling_new(centroid_coordinates_1,
                                                                     M=self.para.clusterNumberL2,
                                                                     k=self.para.nearestNeighborL2,
-                                                                    batch_size=self.para.testBatchSize,
+                                                                    batch_size=batchSize,
                                                                     nodes_n=self.para.clusterNumberL1)
         MiddleGraph_2 = utils.middle_graph_generation(centroid_coordinates_2, batch_size=1, M=self.para.clusterNumberL2)
 
-        feed_dict = {self.placeholder['isTraining']:False,
-                     self.placeholder['batch_size']: self.para.testBatchSize,
+        feed_dict = {self.placeholder['isTraining']: False,
+                     self.placeholder['batch_size']: batchSize,
                      self.placeholder['coordinate']: coordinate,
                      self.placeholder['graph_1']: graph,  # for 1st gcn layer graph
                      self.placeholder['batch_index_l1']: IndexL1,  # for 1st pooling layer
@@ -194,23 +195,3 @@ class TopOperate(object):
             feed_dict=feed_dict)
 
         return probability
-
-    def mutil_gpu_model(self, gpu_nums):
-        with tf.device('/cpu:0'):
-            tower_grads = []
-            for i in range(gpu_nums):
-                with tf.device('/gpu:%d' % i):
-                    with tf.name_scope('GPU_%d' % i) as scope:
-                        # cur_loss = get_loss(x, y_regularizer, scope)
-                        tower_loss = self.model.tower_loss(scope)
-                        # tf.get_variable的命名空间
-                        tf.get_variable_scope().reuse_variables()
-                        # 使用当前gpu计算所有变量的梯度
-                        grads = self.model.optimizer.compute_gradients(tower_loss)
-                        tower_grads.append(grads)
-            # 计算变量的平均梯度
-            grads = tf_utils.average_gradients(tower_grads)
-            # 使用平均梯度更新参数
-            apply_gradient_op = self.model.optimizer.apply_gradients(grads)
-            return apply_gradient_op
-

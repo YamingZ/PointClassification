@@ -10,6 +10,7 @@ class Parameters():
         # self.modelDir = os.path.dirname(os.path.abspath('.')) + '/model/'
         # self.logDir = os.path.dirname(os.path.abspath('.')) + '/log/'
         # self.fileName = '0221_40nn_cheby_2_2_w_55_52_multi_res.txt'
+        self.GpuNums = 4
 
         #fix parameters
         self.samplingType = 'farthest_sampling'
@@ -21,7 +22,7 @@ class Parameters():
         self.chebyshev_3_Order = 3
         self.keep_prob_1 = 0.9
         self.keep_prob_2 = 0.9
-        self.batchSize = 28
+        self.batchSize = 28*self.GpuNums
         self.evalBatchSize = 28
         self.testBatchSize = 1
 
@@ -47,7 +48,10 @@ class Parameters():
 
         self.clusterNumberL2 = 20  # layer two convolutional layer's cluster number
         self.nearestNeighborL2 = 6 # nearest neighbor number of each centroid points when performing max pooling in second gcn layer
-        
+
+
+    def info(self):
+        print("GPU's number:{}\n".format(self.GpuNums))
         
 
 

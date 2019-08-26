@@ -1,52 +1,52 @@
 import numpy as np
 import tensorflow as tf
-from sampling.tf_sampling import *
-from HDF5_loader import *
+# from sampling.tf_sampling import *
+# from HDF5_loader import *
 
 # make no sense
-def farthest_sampling(batch_original_coor, batch_size, nodes_n, M, k):
-    # input    1) batch_original_coor:  a.coordinate (B,N,3)
-    #                                   b.input features (B,N,n1)
-    #          2) batch_size = B
-    #          3) nodes_n = N
-    #          4) M centroid point number(cluster number)
-    #          5) k nearest neighbor number
-    # output:  1) batch index (B, M*k,1)
-    #          2) centroid points (B, M, 3)
-    centroid_points_ids = farthest_point_sample(M, batch_original_coor)    #(B,M,1)
-    centroid_points = gather_point(batch_original_coor, centroid_points_ids)  #(B,M,3)
-    batch_local_points_id = []
-    for batch_index in range(batch_size):
-        original_coor = batch_original_coor[batch_index]
-        centroid_points_id = centroid_points_ids[batch_index]
-        # calculate distance between each centroid_points and others
-        M_indices = []
-        for i in range(M):
-            centroid_point_id = centroid_points_id[i]
-            centroid_point = original_coor[centroid_point_id,:] #[x,y,z]
-            # (X - Y)*(X - Y) = -2X*Y + X*X + Y*Y
-            d1 = -2 * tf.matmul([centroid_point], tf.transpose(original_coor,[1,0]))
-            d2 = tf.reduce_sum(tf.square([centroid_point]),axis=1,keepdims=True)
-            d3 = tf.reduce_sum(tf.square(original_coor),axis=1)
-            distances = tf.sqrt(d1+d2+d3)
-            _,indices = tf.nn.top_k(-distances,k,sorted=True)
-            M_indices.append(indices)
-        local_points_id = tf.concat(M_indices,axis=0)
-        local_points_id = tf.reshape(local_points_id,[M*k])
-        batch_local_points_id.append([local_points_id])
-    batch_local_id = tf.concat(batch_local_points_id,axis=0)
-    return batch_local_id,centroid_points
-
-def non_loop(test_matrix, train_matrix):
-    num_test = test_matrix.shape[0]
-    num_train = train_matrix.shape[0]
-    dists = np.zeros((num_test, num_train))
-
-    d1 = -2 * np.dot(test_matrix, train_matrix.T)    # shape (num_test, num_train)
-    d2 = np.sum(np.square(test_matrix), axis=1, keepdims=True)    # shape (num_test, 1)
-    d3 = np.sum(np.square(train_matrix), axis=1)     # shape (num_train, )
-    dists = np.sqrt(d1 + d2 + d3)  # broadcasting
-    return dists
+# def farthest_sampling(batch_original_coor, batch_size, nodes_n, M, k):
+#     # input    1) batch_original_coor:  a.coordinate (B,N,3)
+#     #                                   b.input features (B,N,n1)
+#     #          2) batch_size = B
+#     #          3) nodes_n = N
+#     #          4) M centroid point number(cluster number)
+#     #          5) k nearest neighbor number
+#     # output:  1) batch index (B, M*k,1)
+#     #          2) centroid points (B, M, 3)
+#     centroid_points_ids = farthest_point_sample(M, batch_original_coor)    #(B,M,1)
+#     centroid_points = gather_point(batch_original_coor, centroid_points_ids)  #(B,M,3)
+#     batch_local_points_id = []
+#     for batch_index in range(batch_size):
+#         original_coor = batch_original_coor[batch_index]
+#         centroid_points_id = centroid_points_ids[batch_index]
+#         # calculate distance between each centroid_points and others
+#         M_indices = []
+#         for i in range(M):
+#             centroid_point_id = centroid_points_id[i]
+#             centroid_point = original_coor[centroid_point_id,:] #[x,y,z]
+#             # (X - Y)*(X - Y) = -2X*Y + X*X + Y*Y
+#             d1 = -2 * tf.matmul([centroid_point], tf.transpose(original_coor,[1,0]))
+#             d2 = tf.reduce_sum(tf.square([centroid_point]),axis=1,keepdims=True)
+#             d3 = tf.reduce_sum(tf.square(original_coor),axis=1)
+#             distances = tf.sqrt(d1+d2+d3)
+#             _,indices = tf.nn.top_k(-distances,k,sorted=True)
+#             M_indices.append(indices)
+#         local_points_id = tf.concat(M_indices,axis=0)
+#         local_points_id = tf.reshape(local_points_id,[M*k])
+#         batch_local_points_id.append([local_points_id])
+#     batch_local_id = tf.concat(batch_local_points_id,axis=0)
+#     return batch_local_id,centroid_points
+#
+# def non_loop(test_matrix, train_matrix):
+#     num_test = test_matrix.shape[0]
+#     num_train = train_matrix.shape[0]
+#     dists = np.zeros((num_test, num_train))
+#
+#     d1 = -2 * np.dot(test_matrix, train_matrix.T)    # shape (num_test, num_train)
+#     d2 = np.sum(np.square(test_matrix), axis=1, keepdims=True)    # shape (num_test, 1)
+#     d3 = np.sum(np.square(train_matrix), axis=1)     # shape (num_train, )
+#     dists = np.sqrt(d1 + d2 + d3)  # broadcasting
+#     return dists
 
 
 def average_gradients(tower_grads):
