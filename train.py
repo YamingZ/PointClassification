@@ -4,9 +4,12 @@ import read_data
 from parameters import *
 from TopOperate import *
 import tensorflow as tf
+from data import DataSets
 
 # ===============================Hyper parameters========================
 para = Parameters()
+para.info()
+para.log()
 # ============================Define placeholders==========================
 placeholders = {
     'isTraining': tf.placeholder(tf.bool,name='is_training'),
@@ -24,8 +27,10 @@ placeholders = {
 # ================================Load data===============================
 inputTrain, trainLabel, inputTest, testLabel = read_data.load_data(para.pointNumber, para.samplingType, para.dataDir)
 scaledLaplacianTrain, scaledLaplacianTest = read_data.prepareData(inputTrain, inputTest, para.neighborNumber, para.pointNumber,para.dataDir)
-data = (inputTrain,scaledLaplacianTrain,trainLabel, #trian data
+datas = (inputTrain,scaledLaplacianTrain,trainLabel, #trian data
         inputTest,scaledLaplacianTest,testLabel)    #test data
+train_dataset = DataSets((inputTrain,scaledLaplacianTrain,trainLabel))
+val_dataset = DataSets((inputTest,scaledLaplacianTest,testLabel))
 weight_dict = utils.weight_dict_fc(trainLabel, para)
 # ================================Create model===============================
 model = models.GPN(para,placeholders,logging=True)
@@ -33,7 +38,7 @@ model = models.GPN(para,placeholders,logging=True)
 sess = tf.Session()
 # ==============================Init variables===============================
 if para.restoreModel:
-    model.load(sess)
+    model.load(para.ckptDir,sess)
 else:
     sess.run(tf.global_variables_initializer())
 # =============================Graph Visualizing=============================
@@ -47,17 +52,18 @@ train_writer.add_graph(sess.graph)
 eval_log_dir = "tensorboard/eval/"+TIMESTAMP
 eval_writer = tf.summary.FileWriter(eval_log_dir)
 # ===============================Train model ================================
-top_op = TopOperate(placeholders,model,para,sess,weight_dict=weight_dict,data=data)
+top_op = TopOperate(placeholders,model,para,sess,weight_dict=weight_dict)
 for epoch in range(para.max_epoch):
     train_start_time = time.time()
-    top_op.trainOneEpoch(train_writer)
+    top_op.trainOneEpoch(train_writer,train_dataset)
     train_end_time = time.time()
     train_time = train_end_time - train_start_time
     print("train epoch {} cost time is {} second".format(epoch,train_time))
-    if epoch % 2 == 0:  #evaluate model after every two training epoch
-        eval_start_time = time.time()
-        top_op.evaluateOneEpoch(eval_writer)
-        eval_end_time = time.time()
-        eval_time = eval_end_time - eval_start_time
-        print("eval epoch {} cost time is {} second".format(epoch, eval_time))
-model.save(sess)
+    if para.EvalCycle:
+        if epoch % para.EvalCycle == 0:  #evaluate model after every two training epoch
+            eval_start_time = time.time()
+            top_op.evaluateOneEpoch(eval_writer)
+            eval_end_time = time.time()
+            eval_time = eval_end_time - eval_start_time
+            print("eval epoch {} cost time is {} second".format(epoch, eval_time))
+model.save(para.ckptDir,sess)

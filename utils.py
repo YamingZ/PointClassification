@@ -300,10 +300,10 @@ def jitter_point_cloud(batch_data, sigma=0.008, clip=0.02):
     return jittered_data
 
 def add_rotation(batch_data):
-    rotation_Theta = np.random.random()     #[0,PI]
-    rotation_Phi = np.random.random()       #[0,2PI]
-    print(rotation_Theta,rotation_Phi)
-    rotation = [rotation_Theta,rotation_Phi]
+    rotation_Theta = np.random.uniform(0, np.pi)  # [0,PI]
+    rotation_Phi = np.random.uniform(0, 2 * np.pi)  # [0,2PI]
+    print(rotation_Theta, rotation_Phi)
+    rotation = np.array([[[0, rotation_Theta, rotation_Phi]]])
     rotation += batch_data
     return rotation
 

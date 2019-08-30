@@ -1,62 +1,81 @@
-import tensorflow as tf
+from sklearn.utils import shuffle
+from sklearn.preprocessing import label_binarize
 import numpy as np
-import h5py as h5
-from parameters import *
+import scipy
+import utils
 
-class h5_generator:
-    def __init__(self, file):
-        self.file = file
-    def __call__(self):
-        with h5.File(self.file, 'r') as datas:
-            for data in datas['data']:
-                yield data
-            for label in datas['label']:
-                yield label
+class DataSets(object):
+    def __init__(self, data, rotate=True, shuffle = True, jitter = True,spherical = True):
+        coor, graph, label = data
+        self._coor = np.concatenate([value for value in coor.values()])
+        self._label = label_binarize(np.concatenate([value for value in label.values()]),classes=[j for j in range(40)])
+        self._graph = scipy.sparse.vstack(list(graph.values())).tocsr()
+        self._count = 0
+        self._N = len(self._label)
 
-# def h5_generator(file):
-#     with h5.File(file, 'r') as datas:
-#         for data in datas['data']:
-#             yield data
+        self.rotate = rotate
+        self.shuffle = shuffle
+        self.jitter = jitter
+        self.spherical = spherical
 
-# class h5_generator(object):
-#     def __init__(self, file,max):
-#         self.max = max
-#         self.n, self.a, self.b = 0, 0, 1
-#
-#     def __iter__(self):
-#         return self
-#
-#     def next(self):
-#         if self.n < self.max:
-#             r = self.b
-#             self.a, self.b = self.b, self.a + self.b
-#             self.n = self.n + 1
-#             return r
-#         raise StopIteration()
+    def get_all_data(self):
+        return self._coor, self._graph, self._label
 
-class Data(object):
-    def __init__(self):
-        self.dataset= None
-        self.iterator = self.dataset.make_initializable_iterator()
-
-    def read_data(self,file_paths):
-        self.dataset=tf.data.Dataset.from_tensor_slices(file_paths)
-        self.dataset = self.dataset.interleave(
-            lambda filename: tf.data.Dataset.from_generator(
-                h5_generator(filename),
-                tf.uint8,tf.TensorShape([427,561,3])
-            )
-        )
-
-
-    def process_data(self):
+    def get_samples(self, N=100):
         pass
 
-    def get_next_batch(self):
-        pass
+    def iter(self, batch_size=1):
+        if self.shuffle:
+            self._coor, self._graph, self._label = shuffle(self._coor, self._graph, self._label)
+        '''Return an iterator which iterates on the elements of the dataset.'''
+        return self.__iter__(batch_size)
+
+    def __iter__(self, batch_size=1):
+        while self._count < np.floor(self._N / batch_size):
+            start = self._count * batch_size
+            end = start + batch_size
+            batchCoor, batchGraph, batchLabel = utils.get_mini_batch(self._coor, self._graph, self._label, start, end)
+            self._count += 1
+            # data process
+            batchGraph = batchGraph.todense()
+            if self.jitter:
+                batchCoor = utils.jitter_point_cloud(batchCoor)
+            if self.rotate:
+                batchCoor = utils.rotate_point_cloud(batchCoor)
+            if self.spherical:
+                batchSCoor = utils.get_Spherical_coordinate(batchCoor)
+                yield batchSCoor, batchCoor, batchGraph, batchLabel
+            else:
+                yield batchCoor, batchGraph, batchLabel
+
+        raise StopIteration
+
+    @property
+    def N(self):
+        '''Number of elements in the dataset.'''
+        return self._N
+    @property
+    def counter(self):
+        return self._count
+
 
 if __name__ =='__main__':
+    import read_data
+    from parameters import *
+
     para = Parameters()
-    datas = h5_generator(para.dataDir+"modelnet/modelnet40_ply_hdf5_2048/ply_data_test0.h5")
-    for data in datas():
-        print(data.shape)
+    inputTrain, trainLabel, inputTest, testLabel = read_data.load_data(para.pointNumber, para.samplingType,
+                                                                       para.dataDir)
+    scaledLaplacianTrain, scaledLaplacianTest = read_data.prepareData(inputTrain, inputTest, para.neighborNumber,
+                                                                      para.pointNumber, para.dataDir)
+    data = inputTrain,scaledLaplacianTrain,trainLabel
+
+    dataset = DataSets(data)
+    iters = dataset.iter(10)
+    batchSCoor, batchCoor, batchGraph, batchLabel = next(iters)
+    print(batchLabel)
+    print(dataset.counter)
+
+    batchSCoor, batchCoor, batchGraph, batchLabel = next(iters)
+    print(batchLabel)
+    print(dataset.counter)

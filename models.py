@@ -1,5 +1,6 @@
 from layers import *
 from block import *
+import time
 
 class Model(object):
     def __init__(self, **kwargs):
@@ -66,18 +67,18 @@ class Model(object):
     def _optimizer(self):
         raise NotImplementedError
 
-    def save(self, sess=None):
+    def save(self,ckpt_path, sess=None):
         if not sess:
             raise AttributeError("TensorFlow session not provided.")
         saver = tf.train.Saver(self.vars)
-        save_path = saver.save(sess, "tmp/%s.ckpt" % self.name)
+        save_path = saver.save(sess, ckpt_path+"%s.ckpt" % self.name)
         print("Model saved in file: %s" % save_path)
 
-    def load(self, sess=None):
+    def load(self,ckpt_path, sess=None):
         if not sess:
             raise AttributeError("TensorFlow session not provided.")
         saver = tf.train.Saver(self.vars)
-        save_path = "tmp/%s.ckpt" % self.name
+        save_path = ckpt_path+"%s.ckpt" % self.name
         saver.restore(sess, save_path)
         print("Model restored from file: %s" % save_path)
 
@@ -103,7 +104,20 @@ class GPN(Model):
                              'graph_3': graph_3,
                              'batch_index_l1': batch_index_l1,
                              'batch_index_l2': batch_index_l2}
-        self.build()
+
+        with tf.variable_scope(self.name+'_var',reuse=tf.AUTO_REUSE):
+            self._build()
+
+            # Build sequential layer model
+            self.activations.append(self.inputs)
+            for layer in self.layers:
+                hidden = layer(self.activations[-1])
+                self.activations.append(hidden)
+            self.outputs = self.activations[-1]
+
+        # Build metrics
+        with tf.name_scope("Loss"):
+            self._loss()
 
     def tower_loss(self,scope):
         losses = tf.get_collection('losses', scope)
@@ -144,11 +158,12 @@ class GPN(Model):
 
     def _optimizer(self):
         self.global_step = tf.get_variable('global_step',dtype=tf.int32,initializer=tf.constant(0),trainable=False)
-        learning_rate = tf.train.exponential_decay(self.para.learningRate,#初始学习率
-                                                        self.global_step,#Variable，每batch加一
-                                                        self.para.lr_decay_steps,#global_step/decay_steps得到decay_rate的幂指数
-                                                        0.96,#学习率衰减系数
-                                                        staircase=False)#若True ，则学习率衰减呈离散间隔
+        learning_rate = tf.train.exponential_decay( self.para.learningRate,#初始学习率
+                                                    self.global_step,#Variable，每batch加一
+                                                    self.para.lr_decay_steps,#global_step/decay_steps得到decay_rate的幂指数
+                                                    self.para.lr_decay_rate,#学习率衰减系数
+                                                    staircase=False)#若True ，则学习率衰减呈离散间隔
+
         self.learning_rate = tf.maximum(learning_rate, self.para.minimum_lr)
         tf.summary.scalar("learning_rate", self.learning_rate)
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)

@@ -146,23 +146,19 @@ class GraphConv(Layer):
                 gcn_output = tf.add_n(chebyOutput) + self.vars['bias']
         else:
             gcn_output = chebyOutput
-
         # batch normalization
         if self.bn:
             with tf.name_scope('batch_norm'):
                 gcn_output = batch_norm(gcn_output,self.vars['offset'],self.vars['scale'],is_training=self.is_training)
-
         with tf.name_scope("activate"):
             gcn_output = self.act(gcn_output)
 
         with tf.name_scope("dropout"):
                 gcn_output = dropout(gcn_output,self.dropout,self.is_training)
-
         if self.pooling:
             with tf.name_scope("max_pooling"):
                 # 每个输出维度中取所有点中数值最大的点输出
-                gcn_output = tf.reduce_max(gcn_output, axis=1)
-
+                gcn_output = tf.reduce_mean(gcn_output, axis=1)
         return gcn_output
 
 class GraphMaxPool(Layer):
@@ -311,9 +307,9 @@ class Conv2d(Layer):
         if self.pooling:
             with tf.name_scope("max_pooling"):
                 num_point = inputs.get_shape()[1].value
-                output = tf.nn.avg_pool(output,
+                output = tf.nn.max_pool(output,
                                          ksize=[1, num_point, 1, 1],
-                                         strides=[1, 2, 2, 1],
+                                         strides=[1, num_point, 1, 1],
                                          padding='VALID')
         return output
 

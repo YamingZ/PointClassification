@@ -30,9 +30,9 @@ shape_name=['airplane','bathtub','bed','bench','bookshelf','bottle','bowl','car'
 # ================================Load data===============================
 data,label = load_h5(para.dataDir+"modelnet/modelnet40_ply_hdf5_2048/ply_data_test0.h5")
 
-coor = np.array(data)[66,0:512,:]
+coor = np.array(data)[18,0:512,:]
 coor = np.expand_dims(coor,axis=0)
-label = np.array(label)[66][0]
+label = np.array(label)[18][0]
 coor_rotate = rotate_point_cloud(coor)
 coor_jitter = jitter_point_cloud(coor_rotate)
 
@@ -51,8 +51,13 @@ model.load(sess)
 
 # ===============================test data ================================
 top_op = TopOperate(placeholders,model,para,sess)
-probability = top_op.predictOneData(Data)
+probability = np.squeeze(top_op.predictOneData(Data))
 
-print(probability)
+sort_probability = probability[np.argsort(-probability)]
+print(sort_probability)
+shape_name = np.array(shape_name)
+sort_shape_name = shape_name[np.argsort(-probability)]
+print(sort_shape_name)
+
 print('predict: {} '.format(np.argmax(probability))+ shape_name[int(np.argmax(probability))])
 print('groundtruth: {} '.format(label) + shape_name[int(label)])
