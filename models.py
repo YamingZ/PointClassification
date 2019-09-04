@@ -37,26 +37,26 @@ class Model(object):
         with tf.variable_scope(self.name+'_var',reuse=tf.AUTO_REUSE):
             self._build()
 
-            # Build sequential layer model
-            self.activations.append(self.inputs)
-            for layer in self.layers:
-                hidden = layer(self.activations[-1])
-                self.activations.append(hidden)
-            self.outputs = self.activations[-1]
+        # Build sequential layer model
+        self.activations.append(self.inputs)
+        for layer in self.layers:
+            hidden = layer(self.activations[-1])
+            self.activations.append(hidden)
+        self.outputs = self.activations[-1]
 
-            # Build metrics
-            with tf.name_scope("Loss"):
-                self._loss()
-            with tf.name_scope("Accuracy"):
-                self._accuracy()
-            with tf.name_scope("Optimizer"):
-                self._optimizer()
+        # Build metrics
+        with tf.name_scope("Loss"):
+            self._loss()
+        with tf.name_scope("Accuracy"):
+            self._accuracy()
+        with tf.name_scope("Optimizer"):
+            self._optimizer()
 
-            # Store model variables for easy access
-            variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-            self.vars = {var.name: var for var in variables}
+        # Store model variables for easy access
+        variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+        self.vars = {var.name: var for var in variables}
 
-            self.summary = tf.summary.merge_all()
+        self.summary = tf.summary.merge_all()
 
     def _loss(self):
         raise NotImplementedError
@@ -90,34 +90,10 @@ class GPN(Model):
         self.is_training = placeholders['isTraining']
         self.batch_size = placeholders['batch_size']
         # signal training device
-        if self.para.GpuNums == 1:
-            self.inputs = placeholders['coordinate']
-            self.other_inputs = placeholders
-            self.build()
+        self.inputs = placeholders['coordinate']
+        self.other_inputs = placeholders
+        self.build()
 
-    def dataInput(self,coordinate,label,weights,graph_1,graph_2,graph_3,batch_index_l1,batch_index_l2):
-        self.inputs = coordinate
-        self.other_inputs = {'label': label,
-                             'weights': weights,
-                             'graph_1': graph_1,
-                             'graph_2': graph_2,
-                             'graph_3': graph_3,
-                             'batch_index_l1': batch_index_l1,
-                             'batch_index_l2': batch_index_l2}
-
-        with tf.variable_scope(self.name+'_var',reuse=tf.AUTO_REUSE):
-            self._build()
-
-            # Build sequential layer model
-            self.activations.append(self.inputs)
-            for layer in self.layers:
-                hidden = layer(self.activations[-1])
-                self.activations.append(hidden)
-            self.outputs = self.activations[-1]
-
-        # Build metrics
-        with tf.name_scope("Loss"):
-            self._loss()
 
     def tower_loss(self,scope):
         losses = tf.get_collection('losses', scope)
@@ -125,10 +101,6 @@ class GPN(Model):
         return total_loss
 
     def _loss(self):
-        with tf.name_scope('L2_loss'):
-            vars = tf.trainable_variables()
-            l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in vars if 'weights' in v.name]) * self.para.l2_rate
-        tf.summary.scalar("l2_loss", l2_loss)
         # with tf.name_scope('TMat_loss'):
         #     theta = self.layers[0].outputs_angle_theta
         #     phi = self.layers[0].outputs_angle_phi
@@ -140,6 +112,10 @@ class GPN(Model):
         #     mat_diff -= tf.constant(np.eye(3), dtype=tf.float32)
         #     mat_diff_loss = tf.nn.l2_loss(mat_diff) * self.para.tmat_rate
         # tf.summary.scalar('TMat_loss', mat_diff_loss)
+        with tf.name_scope('L2_loss'):
+            vars = tf.trainable_variables()
+            l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in vars if 'weights' in v.name]) * self.para.l2_rate
+        tf.summary.scalar("l2_loss", l2_loss)
         with tf.name_scope('Loss'):
             loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.outputs, labels=self.other_inputs['label'])
             loss = tf.multiply(loss, self.other_inputs['weights'])
@@ -162,7 +138,7 @@ class GPN(Model):
                                                     self.global_step,#Variable，每batch加一
                                                     self.para.lr_decay_steps,#global_step/decay_steps得到decay_rate的幂指数
                                                     self.para.lr_decay_rate,#学习率衰减系数
-                                                    staircase=False)#若True ，则学习率衰减呈离散间隔
+                                                    staircase=True)#若True ，则学习率衰减呈离散间隔
 
         self.learning_rate = tf.maximum(learning_rate, self.para.minimum_lr)
         tf.summary.scalar("learning_rate", self.learning_rate)
@@ -174,6 +150,7 @@ class GPN(Model):
         # batch_size * point_num * feature_dim * 1
         if(self.para.useSTN):
             self.layers.append(STN(transform_dim=2,is_training=self.is_training,logging=self.logging))  #STN layer
+        #----------------------------------------------gcn layer 1----------------------------------------------------
         self.layers.append(GraphConv(graph=self.other_inputs['graph_1'],
                                      input_dim=self.para.input_data_dim,
                                      output_dim=self.para.gcn_1_filter_n,
@@ -186,15 +163,15 @@ class GPN(Model):
                                      logging=self.logging
                                      )
                            ) # gcn layer 1
-        # batch_size * point_num * 1 * feature_dim
         self.layers.append(GraphMaxPool(batch_index=self.other_inputs['batch_index_l1'],
                                         batch_size=self.batch_size,
                                         clusterNumber=self.para.clusterNumberL1,
-                                        nearestNeighbor=self.para.nearestNeighborL1,
+                                        nearestNeighbor=self.para.poolingRange,
                                         featuredim=self.para.gcn_1_filter_n,
                                         logging=self.logging
                                         )
-                           ) # max pooling
+                           ) # down-sample and pooling
+        # ----------------------------------------------gcn layer 2----------------------------------------------------
         self.layers.append(GraphConv(graph=self.other_inputs['graph_2'],
                                      input_dim=self.para.gcn_1_filter_n,
                                      output_dim=self.para.gcn_2_filter_n,
@@ -210,12 +187,12 @@ class GPN(Model):
         self.layers.append(GraphMaxPool(batch_index=self.other_inputs['batch_index_l2'],
                                         batch_size=self.batch_size,
                                         clusterNumber=self.para.clusterNumberL2,
-                                        nearestNeighbor=self.para.nearestNeighborL2,
+                                        nearestNeighbor=self.para.poolingRangeL1,
                                         featuredim=self.para.gcn_2_filter_n,
                                         logging=self.logging
                                         )
-                           ) # max pooling
-
+                           ) # down-sample and pooling
+        # ----------------------------------------------gcn layer 3----------------------------------------------------
         self.layers.append(GraphConv(graph=self.other_inputs['graph_3'],
                                      input_dim=self.para.gcn_2_filter_n,
                                      output_dim=self.para.gcn_3_filter_n,
@@ -224,16 +201,36 @@ class GPN(Model):
                                      dropout=self.para.keep_prob_1,
                                      bn=True,
                                      act=tf.nn.relu,
-                                     pooling= True,
                                      is_training=self.is_training,
                                      logging=self.logging
                                      )
-                           ) # gcn layer 2
-        # 28 * 1 * 1 * 1024 --> 28 * 1024
-        self.layers.append(Dense(input_dim=self.para.gcn_3_filter_n,
+                           ) # gcn layer 3
+        self.layers.append(GraphMaxPool(batch_index=self.other_inputs['batch_index_l3'],
+                                        batch_size=self.batch_size,
+                                        clusterNumber=self.para.clusterNumberL3,
+                                        nearestNeighbor=self.para.poolingRangeL2,
+                                        featuredim=self.para.gcn_3_filter_n,
+                                        logging=self.logging
+                                        )
+                           ) # # down-sample and pooling
+        # ----------------------------------------------gcn layer 4----------------------------------------------------
+        # self.layers.append(GraphConv(graph=self.other_inputs['graph_3'],
+        #                              input_dim=self.para.gcn_2_filter_n,
+        #                              output_dim=self.para.gcn_3_filter_n,
+        #                              pointnumber=self.para.clusterNumberL2,
+        #                              chebyshevOrder=self.para.chebyshev_3_Order,
+        #                              dropout=self.para.keep_prob_1,
+        #                              bn=True,
+        #                              act=lambda x: x,
+        #                              is_training=self.is_training,
+        #                              logging=self.logging
+        #                              )
+        #                    )  # gcn layer 3
+        # ----------------------------------------------FC layer 1-----------------------------------------------------
+        self.layers.append(Dense(input_dim=self.para.gcn_3_filter_n*self.para.clusterNumberL3,
                                  output_dim=self.para.fc_1_n,
                                  dropout=self.para.keep_prob_2,
-                                 input_reshape=False,
+                                 input_reshape=True,
                                  act= tf.nn.relu,
                                  bias=True,
                                  bn=True,
@@ -241,7 +238,19 @@ class GPN(Model):
                                  logging=self.logging
                                  )
                            )  # fc layer 1
-        # 28 * 128
+        # ----------------------------------------------FC layer 2-----------------------------------------------------
+        # self.layers.append(Dense(input_dim=self.para.fc_1_n,
+        #                          output_dim=self.para.fc_2_n,
+        #                          dropout=self.para.keep_prob_2,
+        #                          input_reshape=False,
+        #                          act=tf.nn.relu,
+        #                          bias=True,
+        #                          bn=True,
+        #                          is_training=self.is_training,
+        #                          logging=self.logging
+        #                          )
+        #                    )     # fc layer 2
+        # ----------------------------------------------FC layer 3-----------------------------------------------------
         self.layers.append(Dense(input_dim=self.para.fc_1_n,
                                  output_dim=self.para.outputClassN,
                                  dropout=self.para.keep_prob_2,
@@ -252,6 +261,6 @@ class GPN(Model):
                                  is_training=self.is_training,
                                  logging=self.logging
                                  )
-                           )     # fc layer 3
-        # 28 * 40
+                           )     # fc layer 2
+
 

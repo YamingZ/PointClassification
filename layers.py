@@ -184,8 +184,8 @@ class GraphMaxPool(Layer):
         batch_idx_tile_reshape = tf.reshape(batch_idx_tile, [M * k * batch_size, 1])
         new_index = tf.concat([batch_idx_tile_reshape, index_reshape], axis=1)
         group_features = tf.gather_nd(inputs, new_index)  # get M*K points' feature form N points' feature
-
         group_features_reshape = tf.reshape(group_features, [batch_size, M, k, n])
+        '''That operation is often taken to be the maximum value, but it can be any permutation invariant operation, such as a sum or an average.'''
         max_features = tf.reduce_max(group_features_reshape, axis=2)
         return max_features
 
@@ -287,7 +287,7 @@ class Conv2d(Layer):
         else: x = inputs
         # dropout
         with tf.name_scope('dropout'):
-            x = tf.nn.dropout(x, self.dropout,self.is_training)
+            x = dropout(x, self.dropout,self.is_training)
         # convolution
         with tf.name_scope('convolution'):
             output = tf.nn.conv2d(x,self.vars['weights'],strides=[1,1,1,1],padding="VALID")

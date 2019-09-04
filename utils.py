@@ -154,6 +154,38 @@ def farthest_sampling(batch_original_coor, M, k, batch_size, nodes_n):
 
     return batch_index, batch_centroid_points
 
+def farthest_sampling_only(original_coor,M):
+    original_coor_shape = original_coor.shape
+    batch_size = original_coor_shape[0]
+    nodes_n = original_coor_shape[1]
+    batch_centroid_points = np.zeros([batch_size, M * 3])
+    for j in range(batch_size):
+        pc_object_coor = original_coor[j]
+        # calculate pair wise distance
+        random.seed(1)
+        initial_index = random.randint(0, nodes_n - 1)
+        initial_point = pc_object_coor[initial_index]
+        initial_point = initial_point[np.newaxis, :]
+        distance = np.zeros((M, nodes_n))
+        distance[0] = cdist(initial_point, pc_object_coor)
+        solution_set = []
+        remaining_set = [i for i in range(nodes_n)]
+        a = initial_index
+        solution_set.append(a)
+        remaining_set.remove(a)
+        for i in range(M - 1):
+            d_r_s = distance[0:i + 1, :]
+            a = np.min(d_r_s, axis=0)
+            max_index = np.argmax(a)
+            solution_set.append(max_index)
+            new_coor = pc_object_coor[max_index]
+            new_coor = new_coor[np.newaxis, :]
+            d = cdist(new_coor, pc_object_coor)
+            distance[i + 1] = d
+        select_coor = pc_object_coor[solution_set]
+        batch_centroid_points[j] = select_coor.flatten()
+    return batch_centroid_points
+
 def farthest_sampling_new(batch_original_coor, M, k, batch_size, nodes_n):
     # input    1) coordinate (B,N*3) 2) input features B*N*n1
     #          3)M centroid point number(cluster number) 4) k nearest neighbor number
@@ -174,7 +206,7 @@ def farthest_sampling_new(batch_original_coor, M, k, batch_size, nodes_n):
         distance[0] = cdist(initial_point, pc_object_coor)
         solution_set = []
         remaining_set = [i for i in range(nodes_n)]
-        a = random.randint(0, nodes_n - 1)
+        a = initial_index
         solution_set.append(a)
         remaining_set.remove(a)
         
@@ -198,9 +230,55 @@ def farthest_sampling_new(batch_original_coor, M, k, batch_size, nodes_n):
         batch_index[j] = index_select
     return batch_index, batch_centroid_points
 
+def multi_farthest_sampling(batch_original_coor,nodes_n,batch_size,M_list,K_list):
+    batch_object_coor = batch_original_coor.reshape([batch_size, nodes_n, 3])  # (28,1024,3)
+    M = M_list[0]
+    layers = len(M_list)
+    batch_index = [[0] * batch_size for row in range(layers)]
+    batch_centroid_points = [[0] * batch_size for row in range(layers)]
+    for j in range(batch_size):
+        pc_object_coor = batch_object_coor[j]
+        # calculate pair wise distance
+        random.seed(1)
+        initial_index = random.randint(0, nodes_n - 1)
+        initial_point = pc_object_coor[initial_index]
+        initial_point = initial_point[np.newaxis, :]
+
+        distance = np.zeros((M, nodes_n))
+        distance[0] = cdist(initial_point, pc_object_coor)
+        solution_set = []
+        remaining_set = [i for i in range(nodes_n)]
+        a = initial_index
+        solution_set.append(a)
+        remaining_set.remove(a)
+
+        # The mechanism of finding the next centroid point is calculate all the distance between remaining
+        # points with the existing centroid point and pick the one with the max min value among them
+        for i in range(M - 1):
+            d_r_s = distance[0:i + 1, :]
+            a = np.min(d_r_s, axis=0)
+            max_index = np.argmax(a)
+            solution_set.append(max_index)
+            new_coor = pc_object_coor[max_index]
+            new_coor = new_coor[np.newaxis, :]
+            d = cdist(new_coor, pc_object_coor)
+            distance[i + 1] = d
+
+        select_coor = pc_object_coor
+        for i in range(layers):
+            tree = cKDTree(select_coor)
+            solution_set_layer = solution_set[:M_list[i]]       # point index
+            select_coor = pc_object_coor[solution_set_layer]    # point set
+            dd, ii = tree.query(select_coor, k=K_list[i])       # nearest index
+            index_select = ii.flatten()
+            batch_centroid_points[j][i] = select_coor.flatten()
+            batch_index[j][i] = index_select
+    return batch_index, batch_centroid_points
 
 
-def middle_graph_generation(centroid_coordinates, batch_size, M):
+
+
+def middle_graph_generation(centroid_coordinates, batch_size, M, K):
     # (1)input:
     #   centroid coordinates (B,M*3)
     # (2)output:
@@ -210,7 +288,7 @@ def middle_graph_generation(centroid_coordinates, batch_size, M):
     for i in range(len(centroid_coordinates)):
         select_coor = centroid_coordinates[i]
         tree = cKDTree(select_coor)
-        dd, ii = tree.query(select_coor, k=M-5) #M-5 #40 #55
+        dd, ii = tree.query(select_coor, k=K) #M-5 #40 #55
         A = adjacency(dd, ii)
         L_scaled = scaled_laplacian(A).todense()
         L_scaled = np.array(L_scaled).flatten()

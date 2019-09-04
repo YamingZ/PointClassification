@@ -20,17 +20,15 @@ placeholders = {
     'graph_1': tf.placeholder(tf.float32, [None, para.pointNumber * para.pointNumber], name='graph1'),
     'graph_2': tf.placeholder(tf.float32, [None, para.clusterNumberL1 * para.clusterNumberL1], name='graph2'),
     'graph_3': tf.placeholder(tf.float32, [None, para.clusterNumberL2 * para.clusterNumberL2], name='graph3'),
-    'batch_index_l1': tf.placeholder(tf.int32, [None, para.clusterNumberL1 * para.nearestNeighborL1],name='batch_index_l1'),
-    'batch_index_l2': tf.placeholder(tf.int32, [None, para.clusterNumberL2 * para.nearestNeighborL2],name='batch_index_l2')
+    # 'graph_4': tf.placeholder(tf.float32, [None, para.clusterNumberL3 * para.clusterNumberL3], name='graph4'),
+    'batch_index_l1': tf.placeholder(tf.int32, [None, para.clusterNumberL1 * para.poolingRange], name='batch_index_l1'),
+    'batch_index_l2': tf.placeholder(tf.int32, [None, para.clusterNumberL2 * para.poolingRangeL1],name='batch_index_l2'),
+    'batch_index_l3': tf.placeholder(tf.int32, [None, para.clusterNumberL3 * para.poolingRangeL2], name='batch_index_l3')
     # 'lr': tf.placeholder(tf.float32, name='lr'),
 }
 # ================================Load data===============================
 inputTrain, trainLabel, inputTest, testLabel = read_data.load_data(para.pointNumber, para.samplingType, para.dataDir)
 scaledLaplacianTrain, scaledLaplacianTest = read_data.prepareData(inputTrain, inputTest, para.neighborNumber, para.pointNumber,para.dataDir)
-datas = (inputTrain,scaledLaplacianTrain,trainLabel, #trian data
-        inputTest,scaledLaplacianTest,testLabel)    #test data
-train_dataset = DataSets((inputTrain,scaledLaplacianTrain,trainLabel))
-val_dataset = DataSets((inputTest,scaledLaplacianTest,testLabel))
 weight_dict = utils.weight_dict_fc(trainLabel, para)
 # ================================Create model===============================
 model = models.GPN(para,placeholders,logging=True)
@@ -54,6 +52,7 @@ eval_writer = tf.summary.FileWriter(eval_log_dir)
 # ===============================Train model ================================
 top_op = TopOperate(placeholders,model,para,sess,weight_dict=weight_dict)
 for epoch in range(para.max_epoch):
+    train_dataset = DataSets((inputTrain, scaledLaplacianTrain, trainLabel))
     train_start_time = time.time()
     top_op.trainOneEpoch(train_writer,train_dataset)
     train_end_time = time.time()
@@ -61,8 +60,9 @@ for epoch in range(para.max_epoch):
     print("train epoch {} cost time is {} second".format(epoch,train_time))
     if para.EvalCycle:
         if epoch % para.EvalCycle == 0:  #evaluate model after every two training epoch
+            eval_dataset = DataSets((inputTest, scaledLaplacianTest, testLabel),one_hot_label=False)
             eval_start_time = time.time()
-            top_op.evaluateOneEpoch(eval_writer)
+            top_op.evaluateOneEpoch(eval_writer,eval_dataset)
             eval_end_time = time.time()
             eval_time = eval_end_time - eval_start_time
             print("eval epoch {} cost time is {} second".format(epoch, eval_time))

@@ -5,10 +5,12 @@ import scipy
 import utils
 
 class DataSets(object):
-    def __init__(self, data, rotate=True, shuffle = True, jitter = True,spherical = True):
+    def __init__(self, data, rotate=True, shuffle = True, jitter = True, spherical = True, one_hot_label = True):
         coor, graph, label = data
         self._coor = np.concatenate([value for value in coor.values()])
-        self._label = label_binarize(np.concatenate([value for value in label.values()]),classes=[j for j in range(40)])
+        self._label = np.concatenate([value for value in label.values()])
+        if one_hot_label:
+            self._label = label_binarize(self._label,classes=[j for j in range(40)])
         self._graph = scipy.sparse.vstack(list(graph.values())).tocsr()
         self._count = 0
         self._N = len(self._label)
@@ -47,7 +49,6 @@ class DataSets(object):
                 yield batchSCoor, batchCoor, batchGraph, batchLabel
             else:
                 yield batchCoor, batchGraph, batchLabel
-
         raise StopIteration
 
     @property
@@ -62,20 +63,60 @@ class DataSets(object):
 if __name__ =='__main__':
     import read_data
     from parameters import *
+    import random
+    import time
 
     para = Parameters()
     inputTrain, trainLabel, inputTest, testLabel = read_data.load_data(para.pointNumber, para.samplingType,
                                                                        para.dataDir)
     scaledLaplacianTrain, scaledLaplacianTest = read_data.prepareData(inputTrain, inputTest, para.neighborNumber,
                                                                       para.pointNumber, para.dataDir)
-    data = inputTrain,scaledLaplacianTrain,trainLabel
+    # data = inputTest,scaledLaplacianTest,testLabel
+    data = inputTrain, scaledLaplacianTrain, trainLabel
 
     dataset = DataSets(data)
-    iters = dataset.iter(10)
+    print(dataset.N)
+    batchSize = 28
+    iters = dataset.iter(batchSize)
     batchSCoor, batchCoor, batchGraph, batchLabel = next(iters)
-    print(batchLabel)
-    print(dataset.counter)
 
-    batchSCoor, batchCoor, batchGraph, batchLabel = next(iters)
-    print(batchLabel)
-    print(dataset.counter)
+    # time_1_start = time.time()
+    # IndexL1, centroid_coordinates_1 = utils.farthest_sampling_new(batchCoor,
+    #                                                               M= 256,
+    #                                                               k= 20,
+    #                                                               batch_size= batchSize,
+    #                                                               nodes_n= 512)
+    # IndexL2, centroid_coordinates_2 = utils.farthest_sampling_new(centroid_coordinates_1,
+    #                                                               M= 64,
+    #                                                               k= 10,
+    #                                                               batch_size= batchSize,
+    #                                                               nodes_n= 256)
+    # IndexL3, centroid_coordinates_3 = utils.farthest_sampling_new(centroid_coordinates_2,
+    #                                                               M= 16,
+    #                                                               k= 10,
+    #                                                               batch_size= batchSize,
+    #                                                               nodes_n= 64)
+    # time_1_stop = time.time()
+    # time_1 = time_1_stop - time_1_start
+    # print(time_1)
+    #
+    # time_2_start = time.time()
+    # Indexs,centroid_coordinates = utils.multi_farthest_sampling(batchCoor,
+    #                                                             M_list = [256,64,16],
+    #                                                             K_list= [20,10,10],
+    #                                                             batch_size= batchSize,
+    #                                                             nodes_n = 512)
+    # time_2_stop = time.time()
+    # time_2 = time_2_stop - time_2_start
+    # print(time_2)
+
+
+    # while True:
+    #     try:
+    #         batchSCoor, batchCoor, batchGraph, batchLabel = next(iters)
+    #         print(batchLabel)
+    #         print(dataset.counter)
+    #     except StopIteration:
+    #         print('data over')
+    #         break
+
