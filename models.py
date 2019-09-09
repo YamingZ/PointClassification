@@ -117,7 +117,7 @@ class GPN(Model):
             l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in vars if 'weights' in v.name]) * self.para.l2_rate
         tf.summary.scalar("l2_loss", l2_loss)
         with tf.name_scope('Loss'):
-            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.outputs, labels=self.other_inputs['label'])
+            loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.outputs, labels=self.other_inputs['label'])
             loss = tf.multiply(loss, self.other_inputs['weights'])
             loss = tf.reduce_mean(loss)
             self.loss = loss + l2_loss #+ mat_diff_loss
@@ -138,7 +138,7 @@ class GPN(Model):
                                                     self.global_step,#Variable，每batch加一
                                                     self.para.lr_decay_steps,#global_step/decay_steps得到decay_rate的幂指数
                                                     self.para.lr_decay_rate,#学习率衰减系数
-                                                    staircase=True)#若True ，则学习率衰减呈离散间隔
+                                                    staircase=False)#若True ，则学习率衰减呈离散间隔
 
         self.learning_rate = tf.maximum(learning_rate, self.para.minimum_lr)
         tf.summary.scalar("learning_rate", self.learning_rate)

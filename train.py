@@ -29,7 +29,8 @@ placeholders = {
 # ================================Load data===============================
 inputTrain, trainLabel, inputTest, testLabel = read_data.load_data(para.pointNumber, para.samplingType, para.dataDir)
 scaledLaplacianTrain, scaledLaplacianTest = read_data.prepareData(inputTrain, inputTest, para.neighborNumber, para.pointNumber,para.dataDir)
-weight_dict = utils.weight_dict_fc(trainLabel, para)
+train_weight_dict = utils.train_weight_dict(trainLabel, para)
+eval_weight_dict = utils.eval_weight_dict(testLabel)
 # ================================Create model===============================
 model = models.GPN(para,placeholders,logging=True)
 # =============================Initialize session=============================
@@ -47,22 +48,22 @@ train_log_dir = "tensorboard/train/"+TIMESTAMP
 train_writer = tf.summary.FileWriter(train_log_dir)
 train_writer.add_graph(sess.graph)
 # evaluation log
-eval_log_dir = "tensorboard/eval/"+TIMESTAMP
-eval_writer = tf.summary.FileWriter(eval_log_dir)
+# eval_log_dir = "tensorboard/eval/"+TIMESTAMP
+# eval_writer = tf.summary.FileWriter(eval_log_dir)
 # ===============================Train model ================================
-top_op = TopOperate(placeholders,model,para,sess,weight_dict=weight_dict)
+top_op = TopOperate(placeholders,model,para,sess)
 for epoch in range(para.max_epoch):
     train_dataset = DataSets((inputTrain, scaledLaplacianTrain, trainLabel))
     train_start_time = time.time()
-    top_op.trainOneEpoch(train_writer,train_dataset)
+    top_op.trainOneEpoch(train_writer,train_dataset,train_weight_dict)
     train_end_time = time.time()
     train_time = train_end_time - train_start_time
     print("train epoch {} cost time is {} second".format(epoch,train_time))
     if para.EvalCycle:
         if epoch % para.EvalCycle == 0:  #evaluate model after every two training epoch
-            eval_dataset = DataSets((inputTest, scaledLaplacianTest, testLabel),one_hot_label=False)
+            eval_dataset = DataSets((inputTest, scaledLaplacianTest, testLabel))
             eval_start_time = time.time()
-            top_op.evaluateOneEpoch(eval_writer,eval_dataset)
+            top_op.evaluateOneEpoch(eval_dataset,eval_weight_dict)
             eval_end_time = time.time()
             eval_time = eval_end_time - eval_start_time
             print("eval epoch {} cost time is {} second".format(epoch, eval_time))

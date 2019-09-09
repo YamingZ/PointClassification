@@ -14,6 +14,11 @@ import sklearn.metrics
 import random
 from scipy.spatial.distance import cdist
 
+def normalization(data):
+    _max = np.max(data)
+    _min = np.min(data)
+    return (data - _min)/(_max - _min)
+
 def getDataFiles(list_filename):
     BASE_DIR = "/".join((list_filename.split('/'))[0:-1])
     return [BASE_DIR+'/'+line.rstrip() for line in open(list_filename)]
@@ -86,7 +91,7 @@ def add_noise(batch_data,sigma=0.015,clip=0.05):
     new_data=batch_data+noise
     return new_data
 
-def weight_dict_fc(trainLabel, para):
+def train_weight_dict(trainLabel, para):
     train_labels = []
     for i in range(len(trainLabel)):
         [train_labels.append(j) for j in trainLabel[i]]
@@ -103,10 +108,25 @@ def weight_dict_fc(trainLabel, para):
         weight_dict.update({classID: value})
     return weight_dict
 
+def eval_weight_dict(evalLabel):
+    eval_labels = []
+    for i in range(len(evalLabel)):
+        [eval_labels.append(j) for j in evalLabel[i]]
+    from sklearn.preprocessing import label_binarize
+    y_total_40=label_binarize(eval_labels, classes=[i for i in range(40)])
+    class_distribution_40_class=np.sum(y_total_40,axis=0)
+    class_distribution_40_class=[float(i) for i in class_distribution_40_class]
+    class_distribution_40_class=class_distribution_40_class/np.sum(class_distribution_40_class)
+    inverse_dist=1/class_distribution_40_class
+    norm_inv_dist=inverse_dist/np.sum(inverse_dist)
+    weight_dict = dict()
+    for classID, value in enumerate(norm_inv_dist):
+        weight_dict.update({classID: value})
+    return weight_dict
+
 def weights_calculation(batch_labels,weight_dict):
     weights = []
     batch_labels = np.argmax(batch_labels,axis =1)
-   
     for i in batch_labels:
         weights.append(weight_dict[i])
     return weights
@@ -385,29 +405,26 @@ def add_rotation(batch_data):
     rotation += batch_data
     return rotation
 
-def normalized_point_cloud(batch_data):
-    for k in range(batch_data.shape[0]):
-        coor = batch_data[k,...]
-        coor_min = coor.min()
-        coor_max = coor.max()
-        coor_nor = ((coor - coor_min)/(coor_max-coor_min)-0.5)*2
-        return coor_nor
 
-def get_Spherical_coordinate(batch_data):
+def get_Spherical_coordinate(batch_data,normalized = False):
     R = LA.norm(batch_data,ord=2,axis=2)
     x = batch_data[:,:,0]
     y = batch_data[:,:,1]
     z = batch_data[:,:,2]
-    Theta = np.arctan(y/x)
-    Phi = np.arccos(z/R)
+    Theta = np.arccos(z/R)      # [0,pi]
+    Phi = np.arctan2(y,x)       # [-pi,pi]
+    if normalized:
+        R = normalization(R)
+        Theta = Theta / np.pi
+        Phi = (Phi + np.pi) / (2*np.pi)
     s_coor = np.stack([R,Theta,Phi],axis=2)
     return s_coor
 
 if __name__ == '__main__':
-    coor = np.array([[[1,1,1],[2,2,2]],[[3,3,3],[4,4,4]]])
-    # s_coor = get_Spherical_coordinate(coor)
+    coor = np.array([[[0.0,0.0,0.0],[1,1,1],[2,2,2],[3,3,3],[4,4,4]]])
+    s_coor = get_Spherical_coordinate(coor,normalized=True)
     # r_s_coor = add_rotation(s_coor)
-    print(coor)
-    # print(r_s_coor)
+    # print(coor)
+    print(s_coor)
 
 

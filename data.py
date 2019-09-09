@@ -45,7 +45,7 @@ class DataSets(object):
             if self.rotate:
                 batchCoor = utils.rotate_point_cloud(batchCoor)
             if self.spherical:
-                batchSCoor = utils.get_Spherical_coordinate(batchCoor)
+                batchSCoor = utils.get_Spherical_coordinate(batchCoor,normalized=True)
                 yield batchSCoor, batchCoor, batchGraph, batchLabel
             else:
                 yield batchCoor, batchGraph, batchLabel
@@ -73,6 +73,10 @@ if __name__ =='__main__':
                                                                       para.pointNumber, para.dataDir)
     # data = inputTest,scaledLaplacianTest,testLabel
     data = inputTrain, scaledLaplacianTrain, trainLabel
+    weight_dict = utils.train_weight_dict(trainLabel, para)
+
+    for value in weight_dict.values():
+        print(1/value)
 
     dataset = DataSets(data)
     print(dataset.N)
@@ -80,43 +84,11 @@ if __name__ =='__main__':
     iters = dataset.iter(batchSize)
     batchSCoor, batchCoor, batchGraph, batchLabel = next(iters)
 
-    # time_1_start = time.time()
-    # IndexL1, centroid_coordinates_1 = utils.farthest_sampling_new(batchCoor,
-    #                                                               M= 256,
-    #                                                               k= 20,
-    #                                                               batch_size= batchSize,
-    #                                                               nodes_n= 512)
-    # IndexL2, centroid_coordinates_2 = utils.farthest_sampling_new(centroid_coordinates_1,
-    #                                                               M= 64,
-    #                                                               k= 10,
-    #                                                               batch_size= batchSize,
-    #                                                               nodes_n= 256)
-    # IndexL3, centroid_coordinates_3 = utils.farthest_sampling_new(centroid_coordinates_2,
-    #                                                               M= 16,
-    #                                                               k= 10,
-    #                                                               batch_size= batchSize,
-    #                                                               nodes_n= 64)
-    # time_1_stop = time.time()
-    # time_1 = time_1_stop - time_1_start
-    # print(time_1)
-    #
-    # time_2_start = time.time()
-    # Indexs,centroid_coordinates = utils.multi_farthest_sampling(batchCoor,
-    #                                                             M_list = [256,64,16],
-    #                                                             K_list= [20,10,10],
-    #                                                             batch_size= batchSize,
-    #                                                             nodes_n = 512)
-    # time_2_stop = time.time()
-    # time_2 = time_2_stop - time_2_start
-    # print(time_2)
-
-
-    # while True:
-    #     try:
-    #         batchSCoor, batchCoor, batchGraph, batchLabel = next(iters)
-    #         print(batchLabel)
-    #         print(dataset.counter)
-    #     except StopIteration:
-    #         print('data over')
-    #         break
-
+    while True:
+        try:
+            batchSCoor, batchCoor, batchGraph, batchLabel = next(iters)
+            print(batchLabel)
+            print(dataset.counter)
+        except StopIteration:
+            print('data over')
+            break
