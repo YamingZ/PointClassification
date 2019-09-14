@@ -53,7 +53,7 @@ train_writer.add_graph(sess.graph)
 # ===============================Train model ================================
 top_op = TopOperate(placeholders,model,para,sess)
 for epoch in range(para.max_epoch):
-    train_dataset = DataSets((inputTrain, scaledLaplacianTrain, trainLabel))
+    train_dataset = DataSets((inputTrain, scaledLaplacianTrain, trainLabel),rotate=para.isRotationTrain)
     train_start_time = time.time()
     top_op.trainOneEpoch(train_writer,train_dataset,train_weight_dict)
     train_end_time = time.time()
@@ -61,7 +61,7 @@ for epoch in range(para.max_epoch):
     print("train epoch {} cost time is {} second".format(epoch,train_time))
     if para.EvalCycle:
         if epoch % para.EvalCycle == 0:  #evaluate model after every two training epoch
-            eval_dataset = DataSets((inputTest, scaledLaplacianTest, testLabel))
+            eval_dataset = DataSets((inputTest, scaledLaplacianTest, testLabel),rotate=para.isRotationEval)
             eval_start_time = time.time()
             top_op.evaluateOneEpoch(eval_dataset,eval_weight_dict)
             eval_end_time = time.time()

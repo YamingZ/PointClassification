@@ -1,5 +1,18 @@
 from layers import *
 
+class GlobalPooling(Layer):
+    def __init__(self,**kwargs):
+        super(GlobalPooling, self).__init__(**kwargs)
+
+    def _call(self,inputs):
+        num_point = inputs.get_shape()[1].value
+        output = tf.nn.avg_pool(inputs,
+                                ksize=[1, num_point, 1, 1],
+                                strides=[1, num_point, 1, 1],
+                                padding='VALID')
+        return output
+
+
 class TransformDense(Layer):
     def __init__(self,input_dim,transform_dim,**kwargs):
         super(TransformDense,self).__init__(**kwargs)
@@ -28,7 +41,6 @@ class TransformDense(Layer):
 class STN(object):
     # class variable
     global_variable_scope = None
-
     def __init__(self,transform_dim,is_training=True,**kwargs):
         allowed_kwargs = {'name', 'logging'}
         for kwarg in kwargs.keys():
@@ -62,6 +74,7 @@ class STN(object):
                                  bias=True,
                                  input_reshape=True,
                                  act= tf.nn.relu,
+                                 pooling=False,
                                  is_training=self.is_training,
                                  logging=self.logging
                                  ))
@@ -145,3 +158,42 @@ class STN(object):
             if self.logging:
                 tf.summary.histogram(self.name + '/outputs', outputs)
             return outputs
+
+class ChannelAttention(object):
+    # class variable
+    global_variable_scope = None
+    def __init__(self, is_training=True, **kwargs):
+        allowed_kwargs = {'name', 'logging'}
+        for kwarg in kwargs.keys():
+            assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
+        name = kwargs.get('name')
+        if not name:
+            block = self.__class__.__name__.lower()
+            if ChannelAttention.global_variable_scope == tf.get_variable_scope():
+                name = block + '_' + str(get_layer_uid(block))
+            else:
+                name = block
+        self.name = name
+        self.logging = kwargs.get('logging', False)
+        self.is_training = is_training
+        self.block = []
+        self.activations = []
+
+        with tf.variable_scope(self.name + '_var'):
+            self._build()
+
+        ChannelAttention.global_variable_scope = tf.get_variable_scope()
+
+    def __call__(self, inputs): #外层运行主体
+        with tf.name_scope(self.name):
+            outputs = self._call(inputs)#内层运行主体
+            if self.logging:
+                tf.summary.histogram(self.name + '/outputs', outputs)
+            return outputs
+
+    def _build(self):
+        pass
+
+    def _call(self,inputs):
+        pass
+

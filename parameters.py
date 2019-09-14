@@ -4,13 +4,13 @@ class Parameters():
     def __init__(self):
         self.useSTN = False
         self.EvalCycle = 2    #   <1Hz
-        self.isRotation = True
+        self.isRotationTrain = False
+        self.isRotationEval = True
         self.restoreModel = False
         self.dataDir = '/home/ym/PycharmProjects/TF_GPU/Data/'    #1080ti
         self.ckptDir = 'CheckPoint/'
         self.evalDir = 'EvaluateData/'
         # self.dataDir = '/home/zym/PycharmProjects/data/'            #k80
-
 
         #fix parameters
         self.weight_scaler = 40  # 40
@@ -23,16 +23,16 @@ class Parameters():
         self.keep_prob_2 = 0.9
 
         # parameters of train evaluation test
-        self.max_epoch = 30
+        self.max_epoch = 50
         self.trainBatchSize = 40    #total = 9840
         self.evalBatchSize = 137    #total = 2468
         self.testBatchSize = 1
 
         # leraning rate
         self.learningRate = 2e-2
-        self.lr_decay_steps = 100
-        self.lr_decay_rate = 0.95
-        self.minimum_lr = 4e-4
+        self.lr_decay_steps = 80
+        self.lr_decay_rate = 0.96
+        self.minimum_lr = 1e-4
         self.l2_rate = 1e-4     #8e-6
         self.tmat_rate = 1e-4
 

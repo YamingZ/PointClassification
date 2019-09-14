@@ -307,7 +307,7 @@ class Conv2d(Layer):
         if self.pooling:
             with tf.name_scope("max_pooling"):
                 num_point = inputs.get_shape()[1].value
-                output = tf.nn.max_pool(output,
+                output = tf.nn.avg_pool(output,
                                          ksize=[1, num_point, 1, 1],
                                          strides=[1, num_point, 1, 1],
                                          padding='VALID')

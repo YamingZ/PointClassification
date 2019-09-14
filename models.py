@@ -124,7 +124,6 @@ class GPN(Model):
         tf.summary.scalar("loss", self.loss)
         tf.add_to_collection('losses', self.loss)
 
-
     def _accuracy(self):
         self.probability = tf.nn.softmax(self.outputs)
         self.predictLabels = tf.argmax(self.probability, axis=1) #softmax can be delete
@@ -257,7 +256,7 @@ class GPN(Model):
                                  input_reshape=False,
                                  act=lambda x: x,
                                  bias=True,
-                                 bn=True,
+                                 bn=False,
                                  is_training=self.is_training,
                                  logging=self.logging
                                  )
