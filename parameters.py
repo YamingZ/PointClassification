@@ -2,9 +2,9 @@ import os
 
 class Parameters():
     def __init__(self):
-        self.useSTN = False
+        self.useSTN = True
         self.EvalCycle = 2    #   <1Hz
-        self.isRotationTrain = False
+        self.isRotationTrain = True
         self.isRotationEval = True
         self.restoreModel = False
         self.dataDir = '/home/ym/PycharmProjects/TF_GPU/Data/'    #1080ti

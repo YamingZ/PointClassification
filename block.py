@@ -1,18 +1,5 @@
 from layers import *
 
-class GlobalPooling(Layer):
-    def __init__(self,**kwargs):
-        super(GlobalPooling, self).__init__(**kwargs)
-
-    def _call(self,inputs):
-        num_point = inputs.get_shape()[1].value
-        output = tf.nn.avg_pool(inputs,
-                                ksize=[1, num_point, 1, 1],
-                                strides=[1, num_point, 1, 1],
-                                padding='VALID')
-        return output
-
-
 class TransformDense(Layer):
     def __init__(self,input_dim,transform_dim,**kwargs):
         super(TransformDense,self).__init__(**kwargs)
@@ -159,6 +146,19 @@ class STN(object):
                 tf.summary.histogram(self.name + '/outputs', outputs)
             return outputs
 
+class GlobalPooling(Layer):
+    def __init__(self,pool,**kwargs):
+        super(GlobalPooling, self).__init__(**kwargs)
+        self.pool = pool
+
+    def _call(self,inputs):
+        num_point = inputs.get_shape()[1].value
+        x = tf.expand_dims(inputs, -1)
+        output = self.pool(x,ksize=[1, num_point, 1, 1],strides=[1, num_point, 1, 1],padding='VALID')
+        output = tf.squeeze(output,axis=[3])
+        return output
+
+
 class ChannelAttention(object):
     # class variable
     global_variable_scope = None
@@ -192,8 +192,36 @@ class ChannelAttention(object):
             return outputs
 
     def _build(self):
-        pass
+        self.block.append(GlobalPooling(pool=tf.nn.avg_pool))
+        self.block.append(Dense(input_dim=3,
+                                output_dim=16,
+                                dropout=1.0,
+                                input_reshape=True,
+                                act= tf.nn.relu,
+                                bias=True,
+                                bn=False,
+                                is_training=self.is_training,
+                                logging=self.logging
+                                ))
+        self.block.append(Dense(input_dim=16,
+                                output_dim=3,
+                                dropout=1.0,
+                                input_reshape=False,
+                                act= tf.nn.sigmoid,
+                                bias=True,
+                                bn=False,
+                                is_training=self.is_training,
+                                logging=self.logging
+                                ))
 
     def _call(self,inputs):
-        pass
+        self.activations.append(inputs)
+        for block in self.block:
+            hidden = block(self.activations[-1])
+            self.activations.append(hidden)
+        self.scale = self.activations[-1]
+        with tf.name_scope('channel_wise_multiply'):
+            self.scale = tf.expand_dims(self.scale, 1)
+            outputs = tf.multiply(self.scale,inputs)
+        return outputs
 

@@ -146,9 +146,10 @@ class GPN(Model):
 
 
     def _build(self):
-        # batch_size * point_num * feature_dim * 1
+        # shape of GraphConv input and output data as batch_size * point_num * feature_dim
         if(self.para.useSTN):
-            self.layers.append(STN(transform_dim=2,is_training=self.is_training,logging=self.logging))  #STN layer
+            # self.layers.append(STN(transform_dim=2,is_training=self.is_training,logging=self.logging))  #STN layer
+            self.layers.append(ChannelAttention(is_training=self.is_training,logging=self.logging))
         #----------------------------------------------gcn layer 1----------------------------------------------------
         self.layers.append(GraphConv(graph=self.other_inputs['graph_1'],
                                      input_dim=self.para.input_data_dim,
