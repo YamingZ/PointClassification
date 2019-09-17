@@ -2,7 +2,7 @@ import os
 
 class Parameters():
     def __init__(self):
-        self.useSTN = True
+        self.useChannelAttention = True
         self.EvalCycle = 2    #   <1Hz
         self.isRotationTrain = True
         self.isRotationEval = True
@@ -32,7 +32,7 @@ class Parameters():
         self.learningRate = 2e-2
         self.lr_decay_steps = 80
         self.lr_decay_rate = 0.96
-        self.minimum_lr = 1e-4
+        self.minimum_lr = 1e-6
         self.l2_rate = 1e-4     #8e-6
         self.tmat_rate = 1e-4
 

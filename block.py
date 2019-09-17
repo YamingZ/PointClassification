@@ -5,7 +5,6 @@ class TransformDense(Layer):
         super(TransformDense,self).__init__(**kwargs)
         self.input_dim = input_dim
         self.transform_dim = transform_dim
-
         # initialized variable
         with tf.variable_scope(self.name + '_vars'):
             output_dim = self.transform_dim * self.transform_dim
@@ -146,23 +145,11 @@ class STN(object):
                 tf.summary.histogram(self.name + '/outputs', outputs)
             return outputs
 
-class GlobalPooling(Layer):
-    def __init__(self,pool,**kwargs):
-        super(GlobalPooling, self).__init__(**kwargs)
-        self.pool = pool
-
-    def _call(self,inputs):
-        num_point = inputs.get_shape()[1].value
-        x = tf.expand_dims(inputs, -1)
-        output = self.pool(x,ksize=[1, num_point, 1, 1],strides=[1, num_point, 1, 1],padding='VALID')
-        output = tf.squeeze(output,axis=[3])
-        return output
-
 
 class ChannelAttention(object):
     # class variable
     global_variable_scope = None
-    def __init__(self, is_training=True, **kwargs):
+    def __init__(self, input_dim, is_training=True, **kwargs):
         allowed_kwargs = {'name', 'logging'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
@@ -175,6 +162,7 @@ class ChannelAttention(object):
                 name = block
         self.name = name
         self.logging = kwargs.get('logging', False)
+        self.input_dim = input_dim
         self.is_training = is_training
         self.block = []
         self.activations = []
@@ -188,31 +176,57 @@ class ChannelAttention(object):
         with tf.name_scope(self.name):
             outputs = self._call(inputs)#内层运行主体
             if self.logging:
-                tf.summary.histogram(self.name + '/outputs', outputs)
+                tf.summary.histogram('outputs', outputs)
             return outputs
 
     def _build(self):
-        self.block.append(GlobalPooling(pool=tf.nn.avg_pool))
-        self.block.append(Dense(input_dim=3,
-                                output_dim=16,
-                                dropout=1.0,
-                                input_reshape=True,
-                                act= tf.nn.relu,
-                                bias=True,
-                                bn=False,
-                                is_training=self.is_training,
-                                logging=self.logging
-                                ))
-        self.block.append(Dense(input_dim=16,
-                                output_dim=3,
-                                dropout=1.0,
-                                input_reshape=False,
-                                act= tf.nn.sigmoid,
-                                bias=True,
-                                bn=False,
-                                is_training=self.is_training,
-                                logging=self.logging
-                                ))
+        self.block.append(GlobalPooling())
+        self.block.append(Conv2d(input_dim=self.input_dim,
+                                 output_dim=16,
+                                 kernel_size=[1,1],
+                                 dropout=1.0,
+                                 bn=False,
+                                 bias=True,
+                                 input_reshape=False,
+                                 act= lambda x:x,
+                                 pooling=False,
+                                 is_training=self.is_training,
+                                 logging=self.logging
+                                 ))
+
+        self.block.append(Conv2d(input_dim=16,
+                                 output_dim=self.input_dim,
+                                 kernel_size=[1,1],
+                                 dropout=1.0,
+                                 bn=False,
+                                 bias=True,
+                                 input_reshape=False,
+                                 act= lambda x:x,
+                                 pooling=False,
+                                 is_training=self.is_training,
+                                 logging=self.logging
+                                 ))
+
+        # self.block.append(Dense(input_dim=self.input_dim,
+        #                         output_dim=16,
+        #                         dropout=1.0,
+        #                         input_reshape=True,
+        #                         act= tf.nn.relu,
+        #                         bias=True,
+        #                         bn=False,
+        #                         is_training=self.is_training,
+        #                         logging=self.logging
+        #                         ))
+        # self.block.append(Dense(input_dim=16,
+        #                         output_dim=self.input_dim,
+        #                         dropout=1.0,
+        #                         input_reshape=False,
+        #                         act= tf.nn.sigmoid,
+        #                         bias=True,
+        #                         bn=False,
+        #                         is_training=self.is_training,
+        #                         logging=self.logging
+        #                         ))
 
     def _call(self,inputs):
         self.activations.append(inputs)
@@ -221,7 +235,9 @@ class ChannelAttention(object):
             self.activations.append(hidden)
         self.scale = self.activations[-1]
         with tf.name_scope('channel_wise_multiply'):
-            self.scale = tf.expand_dims(self.scale, 1)
+            self.scale = tf.reduce_sum(self.scale,axis=1)
+            self.scale = tf.nn.sigmoid(self.scale)
+            # self.scale = tf.expand_dims(self.scale, 1)
             outputs = tf.multiply(self.scale,inputs)
         return outputs
 

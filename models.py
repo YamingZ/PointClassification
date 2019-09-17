@@ -147,9 +147,6 @@ class GPN(Model):
 
     def _build(self):
         # shape of GraphConv input and output data as batch_size * point_num * feature_dim
-        if(self.para.useSTN):
-            # self.layers.append(STN(transform_dim=2,is_training=self.is_training,logging=self.logging))  #STN layer
-            self.layers.append(ChannelAttention(is_training=self.is_training,logging=self.logging))
         #----------------------------------------------gcn layer 1----------------------------------------------------
         self.layers.append(GraphConv(graph=self.other_inputs['graph_1'],
                                      input_dim=self.para.input_data_dim,
@@ -172,6 +169,9 @@ class GPN(Model):
                                         )
                            ) # down-sample and pooling
         # ----------------------------------------------gcn layer 2----------------------------------------------------
+        if(self.para.useChannelAttention):
+            self.layers.append(ChannelAttention(input_dim=self.para.gcn_1_filter_n,is_training=self.is_training,logging=self.logging))
+
         self.layers.append(GraphConv(graph=self.other_inputs['graph_2'],
                                      input_dim=self.para.gcn_1_filter_n,
                                      output_dim=self.para.gcn_2_filter_n,
@@ -193,6 +193,9 @@ class GPN(Model):
                                         )
                            ) # down-sample and pooling
         # ----------------------------------------------gcn layer 3----------------------------------------------------
+        if(self.para.useChannelAttention):
+            self.layers.append(ChannelAttention(input_dim=self.para.gcn_2_filter_n,is_training=self.is_training,logging=self.logging))
+
         self.layers.append(GraphConv(graph=self.other_inputs['graph_3'],
                                      input_dim=self.para.gcn_2_filter_n,
                                      output_dim=self.para.gcn_3_filter_n,
@@ -226,6 +229,8 @@ class GPN(Model):
         #                              logging=self.logging
         #                              )
         #                    )  # gcn layer 3
+        if(self.para.useChannelAttention):
+            self.layers.append(ChannelAttention(input_dim=self.para.gcn_3_filter_n,is_training=self.is_training,logging=self.logging))
         # ----------------------------------------------FC layer 1-----------------------------------------------------
         self.layers.append(Dense(input_dim=self.para.gcn_3_filter_n*self.para.clusterNumberL3,
                                  output_dim=self.para.fc_1_n,

@@ -52,7 +52,6 @@ class Layer(object):
         __call__(inputs): Wrapper for _call()
         _log_vars(): Log all variables
     """
-
     def __init__(self, **kwargs):
         allowed_kwargs = {'name', 'logging'}
         for kwarg in kwargs.keys():
@@ -65,19 +64,16 @@ class Layer(object):
         self.vars = {}
         logging = kwargs.get('logging', False)
         self.logging = logging
-        # self.sparse_inputs = False
 
     def _call(self, inputs):
         return inputs
 
     def __call__(self, inputs): #外层运行主体
         with tf.name_scope(self.name):
-            # if self.logging and not self.sparse_inputs:
-            #     tf.summary.histogram(self.name + '/inputs', inputs)
             outputs = self._call(inputs)#内层运行主体
             if self.logging:
-                tf.summary.histogram(self.name + '/inputs', inputs)
-                tf.summary.histogram(self.name + '/outputs', outputs)
+                tf.summary.histogram('inputs', inputs)
+                tf.summary.histogram('outputs', outputs)
             return outputs
 
     def _log_vars(self):
@@ -313,6 +309,34 @@ class Conv2d(Layer):
                                          padding='VALID')
         return output
 
+
+class Flatten(Layer):
+    def __init__(self,**kwargs):
+        super(Flatten, self).__init__(**kwargs)
+
+    def _call(self,inputs):
+        shape = inputs.get_shape()
+        dim_num = 1
+        for dim in shape[1:]:
+            dim_num *= dim
+        outputs = tf.reshape(inputs,[-1,dim_num])
+        return outputs
+
+class GlobalPooling(Layer):
+    def __init__(self,**kwargs):
+        super(GlobalPooling, self).__init__(**kwargs)
+
+    def _call(self,inputs):
+        num_point = inputs.get_shape()[1].value
+        channel = inputs.get_shape()[2].value
+        x = tf.expand_dims(inputs, -1)
+        avgPool = tf.nn.avg_pool(x,ksize=[1, num_point, 1, 1],strides=[1, num_point, 1, 1],padding='VALID')
+        avgPool = tf.reshape(avgPool,[-1, 1, 1, channel])
+        maxPool = tf.nn.max_pool(x,ksize=[1, num_point, 1, 1],strides=[1, num_point, 1, 1],padding='VALID')
+        maxPool = tf.reshape(maxPool, [-1, 1, 1, channel])
+        output = tf.concat([avgPool,maxPool],axis=1)
+        # print(output.get_shape())
+        return output
 
 
 
