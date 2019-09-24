@@ -63,9 +63,9 @@ def load_data(NUM_POINT, sampleType, data_dir):
     # BASE_DIR = '/raid60/yingxue.zhang2/ICASSP_code/'
     # BASE_DIR = '/opt/PycharmProjects/data/'
     TRAIN_FILES = utils.getDataFiles( \
-        os.path.join(BASE_DIR, 'modelnet/train_files.txt'))
+        os.path.join(BASE_DIR, 'modelnet40/train_files.txt'))
     TEST_FILES = utils.getDataFiles(\
-        os.path.join(BASE_DIR, 'modelnet/test_files.txt'))
+        os.path.join(BASE_DIR, 'modelnet40/test_files.txt'))
     
     #np.random.shuffle(train_file_idxs)
     if sampleType == 'farthest_sampling':

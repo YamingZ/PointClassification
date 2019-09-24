@@ -147,6 +147,7 @@ class GPN(Model):
 
     def _build(self):
         # shape of GraphConv input and output data as batch_size * point_num * feature_dim
+        self.layers.append(STN())
         #----------------------------------------------gcn layer 1----------------------------------------------------
         self.layers.append(GraphConv(graph=self.other_inputs['graph_1'],
                                      input_dim=self.para.input_data_dim,
@@ -154,7 +155,8 @@ class GPN(Model):
                                      pointnumber=self.para.pointNumber,
                                      chebyshevOrder=self.para.chebyshev_1_Order,
                                      dropout=self.para.keep_prob_1,
-                                     bn=True,
+                                     bn=False,
+                                     bias=True,
                                      act=tf.nn.relu,
                                      is_training=self.is_training,
                                      logging=self.logging
@@ -178,7 +180,8 @@ class GPN(Model):
                                      pointnumber=self.para.clusterNumberL1,
                                      chebyshevOrder=self.para.chebyshev_2_Order,
                                      dropout=self.para.keep_prob_1,
-                                     bn=True,
+                                     bn=False,
+                                     bias=True,
                                      act=tf.nn.relu,
                                      is_training=self.is_training,
                                      logging=self.logging
@@ -202,7 +205,8 @@ class GPN(Model):
                                      pointnumber=self.para.clusterNumberL2,
                                      chebyshevOrder=self.para.chebyshev_3_Order,
                                      dropout=self.para.keep_prob_1,
-                                     bn=True,
+                                     bn=False,
+                                     bias=True,
                                      act=tf.nn.relu,
                                      is_training=self.is_training,
                                      logging=self.logging

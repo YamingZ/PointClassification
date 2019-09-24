@@ -181,9 +181,10 @@ class TopOperate(object):
 
         confusion_matrix = sklearn.metrics.confusion_matrix(labels,predicts)                            #混淆矩阵
         accuracy = sklearn.metrics.accuracy_score(labels,predicts, normalize=True, sample_weight=batchWeights)  #总准确率
-        precision = sklearn.metrics.precision_score(labels,predicts,average ='macro')                      #查准率 weighted
-        recall = sklearn.metrics.recall_score(labels, predicts, average='macro')                           #查全率
+        # precision = sklearn.metrics.precision_score(labels,predicts,average ='macro')                      #查准率 weighted
+        # recall = sklearn.metrics.recall_score(labels, predicts, average='macro')                           #查全率
         f1 = sklearn.metrics.f1_score(labels, predicts, average='macro')                                   #查准率和查全率的调和平均，1-best，0-worst
+        precision, recall, thresholds = sklearn.metrics.precision_recall_curve(label_one_hots.ravel(), probabilitys.ravel())
         fpr, tpr, thresholds = sklearn.metrics.roc_curve(label_one_hots.ravel(), probabilitys.ravel())  #ROC曲线图
         auc = sklearn.metrics.auc(fpr, tpr)                                                             #AUC
 

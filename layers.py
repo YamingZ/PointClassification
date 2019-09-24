@@ -141,7 +141,7 @@ class GraphConv(Layer):
             with tf.name_scope("add_bias"):
                 gcn_output = tf.add_n(chebyOutput) + self.vars['bias']
         else:
-            gcn_output = chebyOutput
+            gcn_output = tf.add_n(chebyOutput)
         # batch normalization
         if self.bn:
             with tf.name_scope('batch_norm'):

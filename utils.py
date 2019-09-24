@@ -420,6 +420,8 @@ def get_Spherical_coordinate(batch_data,normalized = False):
     s_coor = np.stack([R,Theta,Phi],axis=2)
     return s_coor
 
+
+
 if __name__ == '__main__':
     coor = np.array([[[0.0,0.0,0.0],[1,1,1],[2,2,2],[3,3,3],[4,4,4]]])
     s_coor = get_Spherical_coordinate(coor,normalized=True)
