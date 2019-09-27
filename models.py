@@ -147,7 +147,8 @@ class GPN(Model):
 
     def _build(self):
         # shape of GraphConv input and output data as batch_size * point_num * feature_dim
-        self.layers.append(STN())
+        if (self.para.useSTN):
+            self.layers.append(STN(is_training=self.is_training,logging=self.logging))
         #----------------------------------------------gcn layer 1----------------------------------------------------
         self.layers.append(GraphConv(graph=self.other_inputs['graph_1'],
                                      input_dim=self.para.input_data_dim,
@@ -162,12 +163,13 @@ class GPN(Model):
                                      logging=self.logging
                                      )
                            ) # gcn layer 1
-        self.layers.append(GraphMaxPool(batch_index=self.other_inputs['batch_index_l1'],
+        self.layers.append(GraphPool(batch_index=self.other_inputs['batch_index_l1'],
                                         batch_size=self.batch_size,
                                         clusterNumber=self.para.clusterNumberL1,
                                         nearestNeighbor=self.para.poolingRange,
                                         featuredim=self.para.gcn_1_filter_n,
-                                        logging=self.logging
+                                        logging=self.logging,
+                                        pool=tf.reduce_mean
                                         )
                            ) # down-sample and pooling
         # ----------------------------------------------gcn layer 2----------------------------------------------------
@@ -187,12 +189,13 @@ class GPN(Model):
                                      logging=self.logging
                                      )
                            ) # gcn layer 2
-        self.layers.append(GraphMaxPool(batch_index=self.other_inputs['batch_index_l2'],
+        self.layers.append(GraphPool(batch_index=self.other_inputs['batch_index_l2'],
                                         batch_size=self.batch_size,
                                         clusterNumber=self.para.clusterNumberL2,
                                         nearestNeighbor=self.para.poolingRangeL1,
                                         featuredim=self.para.gcn_2_filter_n,
-                                        logging=self.logging
+                                        logging=self.logging,
+                                        pool=tf.reduce_mean
                                         )
                            ) # down-sample and pooling
         # ----------------------------------------------gcn layer 3----------------------------------------------------
@@ -212,12 +215,13 @@ class GPN(Model):
                                      logging=self.logging
                                      )
                            ) # gcn layer 3
-        self.layers.append(GraphMaxPool(batch_index=self.other_inputs['batch_index_l3'],
+        self.layers.append(GraphPool(batch_index=self.other_inputs['batch_index_l3'],
                                         batch_size=self.batch_size,
                                         clusterNumber=self.para.clusterNumberL3,
                                         nearestNeighbor=self.para.poolingRangeL2,
                                         featuredim=self.para.gcn_3_filter_n,
-                                        logging=self.logging
+                                        logging=self.logging,
+                                        pool=tf.reduce_mean
                                         )
                            ) # # down-sample and pooling
         # ----------------------------------------------gcn layer 4----------------------------------------------------
@@ -242,25 +246,25 @@ class GPN(Model):
                                  input_reshape=True,
                                  act= tf.nn.relu,
                                  bias=True,
-                                 bn=True,
+                                 bn=False,
                                  is_training=self.is_training,
                                  logging=self.logging
                                  )
                            )  # fc layer 1
         # ----------------------------------------------FC layer 2-----------------------------------------------------
-        # self.layers.append(Dense(input_dim=self.para.fc_1_n,
-        #                          output_dim=self.para.fc_2_n,
-        #                          dropout=self.para.keep_prob_2,
-        #                          input_reshape=False,
-        #                          act=tf.nn.relu,
-        #                          bias=True,
-        #                          bn=True,
-        #                          is_training=self.is_training,
-        #                          logging=self.logging
-        #                          )
-        #                    )     # fc layer 2
-        # ----------------------------------------------FC layer 3-----------------------------------------------------
         self.layers.append(Dense(input_dim=self.para.fc_1_n,
+                                 output_dim=self.para.fc_2_n,
+                                 dropout=self.para.keep_prob_2,
+                                 input_reshape=False,
+                                 act=tf.nn.relu,
+                                 bias=True,
+                                 bn=False,
+                                 is_training=self.is_training,
+                                 logging=self.logging
+                                 )
+                           )     # fc layer 2
+        # ----------------------------------------------FC layer 3-----------------------------------------------------
+        self.layers.append(Dense(input_dim=self.para.fc_2_n,
                                  output_dim=self.para.outputClassN,
                                  dropout=self.para.keep_prob_2,
                                  input_reshape=False,

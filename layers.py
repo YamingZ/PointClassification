@@ -157,14 +157,15 @@ class GraphConv(Layer):
                 gcn_output = tf.reduce_mean(gcn_output, axis=1)
         return gcn_output
 
-class GraphMaxPool(Layer):
-    def __init__(self,batch_size,batch_index,clusterNumber,nearestNeighbor,featuredim,**kwargs):
-        super(GraphMaxPool,self).__init__(**kwargs)
+class GraphPool(Layer):
+    def __init__(self,batch_size,batch_index,clusterNumber,nearestNeighbor,featuredim,pool,**kwargs):
+        super(GraphPool,self).__init__(**kwargs)
         self.batch_index = batch_index
         self.batch_size = batch_size
         self.clusterNumber = clusterNumber
         self.nearestNeighbor = nearestNeighbor
         self.featuredim = featuredim
+        self.pool = pool
 
     def _call(self, inputs):
         M = self.clusterNumber
@@ -182,7 +183,7 @@ class GraphMaxPool(Layer):
         group_features = tf.gather_nd(inputs, new_index)  # get M*K points' feature form N points' feature
         group_features_reshape = tf.reshape(group_features, [batch_size, M, k, n])
         '''That operation is often taken to be the maximum value, but it can be any permutation invariant operation, such as a sum or an average.'''
-        max_features = tf.reduce_max(group_features_reshape, axis=2)
+        max_features = self.pool(group_features_reshape, axis=2)    #reduce_max
         return max_features
 
 
@@ -323,18 +324,31 @@ class Flatten(Layer):
         return outputs
 
 class GlobalPooling(Layer):
-    def __init__(self,**kwargs):
+    def __init__(self,transpose=False,use_max=False,use_avg=False,use_min=False,**kwargs):
         super(GlobalPooling, self).__init__(**kwargs)
+        self.use_max = use_max
+        self.use_avg = use_avg
+        self.use_min = use_min
+        self.transpose = transpose
 
     def _call(self,inputs):
-        num_point = inputs.get_shape()[1].value
-        channel = inputs.get_shape()[2].value
-        x = tf.expand_dims(inputs, -1)
-        avgPool = tf.nn.avg_pool(x,ksize=[1, num_point, 1, 1],strides=[1, num_point, 1, 1],padding='VALID')
-        avgPool = tf.reshape(avgPool,[-1, 1, 1, channel])
-        maxPool = tf.nn.max_pool(x,ksize=[1, num_point, 1, 1],strides=[1, num_point, 1, 1],padding='VALID')
-        maxPool = tf.reshape(maxPool, [-1, 1, 1, channel])
-        output = tf.concat([avgPool,maxPool],axis=1)
+        # x = tf.expand_dims(inputs, -1)  # (B,N,C)
+        x = inputs
+        pool_feature = []
+        if self.use_avg:
+            avgPool = tf.reduce_mean(x,axis=1,keep_dims=True)  # (B,1,C)
+            pool_feature.append(avgPool)
+        if self.use_max:
+            maxPool = tf.reduce_max(x,axis=1,keep_dims=True)   # (B,1,C)
+            pool_feature.append(maxPool)
+        if self.use_min:
+            minPool = tf.reduce_min(x,axis=1,keep_dims=True)   # (B,1,C)
+            pool_feature.append(minPool)
+
+        output = tf.concat(pool_feature, axis=1)                 # (B,3,C)
+        if self.transpose:
+            output = tf.transpose(output,perm=[0,2,1])           # (B,C,3)
+        output = tf.expand_dims(output, 1)                       # (B,1,3,C)
         # print(output.get_shape())
         return output
 

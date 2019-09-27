@@ -2,7 +2,8 @@ import os
 
 class Parameters():
     def __init__(self):
-        self.useChannelAttention = False
+        self.useSTN = True
+        self.useChannelAttention = True
         self.EvalCycle = 2    #   <1Hz
         self.isRotationTrain = True
         self.isRotationEval = True
@@ -38,12 +39,12 @@ class Parameters():
 
         # dimension of each layer
         self.input_data_dim = 3
-        self.gcn_1_filter_n = 16    # filter number of the first gcn layer
-        self.gcn_2_filter_n = 32    # filter number of the second gcn layer
-        self.gcn_3_filter_n = 64    # filter number of the third gcn layer
+        self.gcn_1_filter_n = 32    # filter number of the first gcn layer
+        self.gcn_2_filter_n = 64    # filter number of the second gcn layer
+        self.gcn_3_filter_n = 128    # filter number of the third gcn layer
         # self.gcn_4_filter_n = 128   # filter number of the fourth gcn layer
-        self.fc_1_n = 1024          # fully connected layer dimension
-        # self.fc_2_n = 512           # fully connected layer dimension
+        self.fc_1_n = 2048          # fully connected layer dimension
+        self.fc_2_n = 1024           # fully connected layer dimension
         self.outputClassN = 40
 
         # multi res parameters
@@ -53,11 +54,11 @@ class Parameters():
 
         self.clusterNumberL1 = 128      # layer two convolution layer's input point number
         self.nearestNeighborL1 = 20     # nearest neighbor number of each centroid points when generating graph in second gcn
-        self.poolingRangeL1 = 2        # nearest neighbor number of each centroid points when performing max pooling in second gcn
+        self.poolingRangeL1 = 4        # nearest neighbor number of each centroid points when performing max pooling in second gcn
 
         self.clusterNumberL2 = 32       # layer three convolution layer's input number
         self.nearestNeighborL2 = 20     # nearest neighbor number of each centroid points when generating graph in third gcn layer
-        self.poolingRangeL2 = 1       # nearest neighbor number of each centroid points when performing max pooling in third gcn
+        self.poolingRangeL2 = 2       # nearest neighbor number of each centroid points when performing max pooling in third gcn
 
         self.clusterNumberL3 = 16       # layer four convolution layer's input number
         # self.nearestNeighborL3 = 16     # nearest neighbor number of each centroid points when generating graph in fourth gcn
