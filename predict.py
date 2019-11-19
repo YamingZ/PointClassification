@@ -1,4 +1,4 @@
-import models
+from RPGCN import *
 import read_data
 from parameters import *
 from TopOperate import *
@@ -6,19 +6,23 @@ from utils import *
 import tensorflow as tf
 
 # ===============================Hyper parameters========================
-para = Parameters()
+para = Parameters(roadparam=True)
+para.info()
+para.save()
 # ============================Define placeholders==========================
 placeholders = {
     'isTraining': tf.placeholder(tf.bool,name='is_training'),
     'batch_size': tf.placeholder(tf.int32,name='batch_size'),
-    'coordinate': tf.placeholder(tf.float32, [None, para.pointNumber, para.input_data_dim], name='coordinate'),
+    'coordinate': tf.placeholder(tf.float32, [None, para.vertexNumG1, para.input_data_dim], name='coordinate'),
     'label': tf.placeholder(tf.float32, [None, para.outputClassN], name='label'),
     'weights': tf.placeholder(tf.float32, [None], name='weights'),
-    'graph_1': tf.placeholder(tf.float32, [None, para.pointNumber * para.pointNumber], name='graph1'),
-    'graph_2': tf.placeholder(tf.float32, [None, para.clusterNumberL1 * para.clusterNumberL1], name='graph2'),
-    'graph_3': tf.placeholder(tf.float32, [None, para.clusterNumberL2 * para.clusterNumberL2], name='graph3'),
-    'batch_index_l1': tf.placeholder(tf.int32, [None, para.clusterNumberL1 * para.nearestNeighborL1],name='batch_index_l1'),
-    'batch_index_l2': tf.placeholder(tf.int32, [None, para.clusterNumberL2 * para.nearestNeighborL2],name='batch_index_l2')
+    'graph_1': tf.placeholder(tf.float32, [None, para.vertexNumG1 * para.vertexNumG1], name='graph1'),
+    'graph_2': tf.placeholder(tf.float32, [None, para.vertexNumG2 * para.vertexNumG2], name='graph2'),
+    'graph_3': tf.placeholder(tf.float32, [None, para.vertexNumG3 * para.vertexNumG3], name='graph3'),
+    'graph_4': tf.placeholder(tf.float32, [None, para.vertexNumG4 * para.vertexNumG4], name='graph4'),
+    'poolIndex_1': tf.placeholder(tf.int32, [None, para.vertexNumG2 * para.poolNumG1], name='poolIndex1'),
+    'poolIndex_2': tf.placeholder(tf.int32, [None, para.vertexNumG3 * para.poolNumG2], name='poolIndex2'),
+    'poolIndex_3': tf.placeholder(tf.int32, [None, para.vertexNumG4 * para.poolNumG3], name='poolIndex3')
 }
 
 shape_name=['airplane','bathtub','bed','bench','bookshelf','bottle','bowl','car','chair',
@@ -28,23 +32,24 @@ shape_name=['airplane','bathtub','bed','bench','bookshelf','bottle','bowl','car'
             'tv_stand','vase','wardrobe','xbox']
 
 # ================================Load data===============================
-data,label = load_h5(para.dataDir+"modelnet/modelnet40_ply_hdf5_2048/ply_data_test0.h5")
+data,label = load_h5(para.dataDir+"modelnet40/modelnet40_ply_hdf5_2048/ply_data_test0.h5")
 
-coor = np.array(data)[18,0:512,:]
+coor = np.array(data)[1000,0:1024,:]
 coor = np.expand_dims(coor,axis=0)
-label = np.array(label)[18][0]
+label = np.array(label)[1000][0]
 coor_rotate = rotate_point_cloud(coor)
 coor_jitter = jitter_point_cloud(coor_rotate)
 
-scaledLaplacian = read_data.get_scaledLaplacian(coor_jitter,para.neighborNumber,para.pointNumber)
+scaledLaplacian = read_data.get_scaledLaplacian(coor_jitter,para.edgeNumG1, para.vertexNumG1)
 Data = (coor_jitter,scaledLaplacian,label)
 
 
-# # ================================Create model===============================
-model = models.GPN(para,placeholders,logging=False)
-# # =============================Initialize session=============================
+# ================================Create model===============================
+model = RPGCN(para,placeholders,logging=True)
+# =============================Initialize session=============================
 sess = tf.Session()
-model.load(sess)
+# ==============================Init variables===============================
+model.load(para.ckptDir,sess)
 # =============================Graph Visualizing=============================
 
 # ==============================Init variables===============================

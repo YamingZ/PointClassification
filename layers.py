@@ -35,7 +35,7 @@ def batch_norm(inputs,offset,scale,is_training,moving_decay=0.9,eps=1e-5):
 
 #dropout add istraining param
 def dropout(input,keep_prob,is_training):
-    return tf.cond(is_training,lambda :tf.nn.dropout(input, keep_prob=keep_prob),lambda :input)
+    return tf.cond(is_training,lambda :tf.nn.dropout(input, rate=1 - keep_prob),lambda :input)
 
 
 class Layer(object):
@@ -81,12 +81,11 @@ class Layer(object):
             tf.summary.histogram(self.name + '/vars/' + var, self.vars[var])
 
 class GraphConv(Layer):
-    def __init__(self,graph,input_dim,output_dim,pointnumber,chebyshevOrder,dropout, bn=False, bias=True, act=tf.nn.relu,pooling=False,is_training=True,**kwargs):
+    def __init__(self,graph,input_dim,output_dim,chebyshevOrder,dropout, bn=False, bias=True, act=tf.nn.relu,pooling=False,is_training=True,**kwargs):
         super(GraphConv, self).__init__(**kwargs)
         self.graph = graph
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.pointnumber = pointnumber
         self.chebyOrder = chebyshevOrder
 
         self.bn = bn
@@ -115,8 +114,9 @@ class GraphConv(Layer):
                     self.vars['scale'] = tf.get_variable('scale', [self.output_dim],initializer=tf.constant_initializer(1))
 
     def _call(self, coordinate):
+        pointnumber = coordinate.get_shape()[1]
         with tf.name_scope('cheby_op'):
-            scaledLaplacian = tf.reshape(self.graph, [-1, self.pointnumber, self.pointnumber])
+            scaledLaplacian = tf.reshape(self.graph, [-1, pointnumber, pointnumber])
             chebyPoly = []  # Chebyshev polynomials
             cheby_K_Minus_1 = tf.matmul(scaledLaplacian, coordinate)
             cheby_K_Minus_2 = coordinate
@@ -134,9 +134,9 @@ class GraphConv(Layer):
                 weights = self.vars['weights_' + str(i)]
                 chebyPolyReshape = tf.reshape(chebyPoly[i], [-1, self.input_dim])
                 output = tf.matmul(chebyPolyReshape, weights)
-                output = tf.reshape(output, [-1, self.pointnumber, self.output_dim])
+                output = tf.reshape(output, [-1, pointnumber, self.output_dim])
                 chebyOutput.append(output)
-        # cheby_op不改变节点数，只改变每个节点的特征数，3--->1000
+        # cheby_op不改变节点数，只改变每个节点的特征数
         if self.bias:
             with tf.name_scope("add_bias"):
                 gcn_output = tf.add_n(chebyOutput) + self.vars['bias']
@@ -158,20 +158,21 @@ class GraphConv(Layer):
         return gcn_output
 
 class GraphPool(Layer):
-    def __init__(self,batch_size,batch_index,clusterNumber,nearestNeighbor,featuredim,pool,**kwargs):
+    def __init__(self,batch_index,batch_size,clusterNumber,nearestNeighbor,pool,**kwargs):
         super(GraphPool,self).__init__(**kwargs)
         self.batch_index = batch_index
         self.batch_size = batch_size
         self.clusterNumber = clusterNumber
         self.nearestNeighbor = nearestNeighbor
-        self.featuredim = featuredim
+        # self.featuredim = featuredim
         self.pool = pool
 
     def _call(self, inputs):
         M = self.clusterNumber
         k = self.nearestNeighbor
-        n = self.featuredim
+        n = inputs.get_shape()[2]
         batch_size = self.batch_size
+
         batch_index = self.batch_index
 
         index_reshape = tf.reshape(batch_index, [M * k * batch_size, 1])
@@ -336,13 +337,13 @@ class GlobalPooling(Layer):
         x = inputs
         pool_feature = []
         if self.use_avg:
-            avgPool = tf.reduce_mean(x,axis=1,keep_dims=True)  # (B,1,C)
+            avgPool = tf.reduce_mean(x,axis=1,keepdims=True)  # (B,1,C)
             pool_feature.append(avgPool)
         if self.use_max:
-            maxPool = tf.reduce_max(x,axis=1,keep_dims=True)   # (B,1,C)
+            maxPool = tf.reduce_max(x,axis=1,keepdims=True)   # (B,1,C)
             pool_feature.append(maxPool)
         if self.use_min:
-            minPool = tf.reduce_min(x,axis=1,keep_dims=True)   # (B,1,C)
+            minPool = tf.reduce_min(x,axis=1,keepdims=True)   # (B,1,C)
             pool_feature.append(minPool)
 
         output = tf.concat(pool_feature, axis=1)                 # (B,3,C)
@@ -352,7 +353,28 @@ class GlobalPooling(Layer):
         # print(output.get_shape())
         return output
 
+class MatmulLayer(Layer):
+    def __init__(self,input_dim, K,**kwargs):
+        super(MatmulLayer, self).__init__(**kwargs)
+        self.input_dim = input_dim
+        self.K = K
+        #initialized variable
+        self.initVariable()
+        if self.logging:
+            self._log_vars()
 
+    def initVariable(self):
+        with tf.variable_scope(self.name + '_vars'):
+            self.vars['weights'] = tf.get_variable('weights',[self.input_dim,self.K*self.K],
+                                                initializer=tf.constant_initializer(0.0),dtype=tf.float32)
+            self.vars['bias'] = tf.get_variable('bias',[self.K*self.K],
+                                                initializer=tf.constant_initializer(0.0),dtype=tf.float32)
+            self.vars['bias'] = self.vars['bias'] + tf.constant(np.eye(self.K).flatten(), dtype=tf.float32)
 
+    def _call(self,inputs):
+        transform = tf.matmul(inputs, self.vars['weights'])
+        transform = tf.nn.bias_add(transform, self.vars['bias'])
+        transform = tf.reshape(transform, [-1, self.K, self.K])
+        return transform
 
 

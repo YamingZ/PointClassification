@@ -8,6 +8,7 @@ import utils
 import sklearn.metrics
 import tf_utils
 
+
 class TopOperate(object):
     def __init__(self,placeholder,model,para,sess):
         self.model = model
@@ -25,7 +26,7 @@ class TopOperate(object):
         batch_count = 0
         while True:
             try:
-                batchSCoor, batchCoor, batchGraph, batchLabel= next(train_iter)
+                SCoor_1, Coor_1, Graph_1, batchLabel= next(train_iter)
             except StopIteration:
                 break
             # 为非均匀数据集加入每种对象类型占比
@@ -37,56 +38,31 @@ class TopOperate(object):
                 print('please enter a valid weighting scheme')
                 batchWeight = utils.uniform_weight(batchLabel)
 
-            # for down-sampling, generate next layer input
-            IndexL1, centroid_coordinates_1 = utils.farthest_sampling_new(batchCoor,
-                                                                          M=self.para.clusterNumberL1,
-                                                                          k=self.para.poolingRange,
-                                                                          batch_size=batchSize,
-                                                                          nodes_n=self.para.pointNumber)
-            # using layer input to generate graph
-            MiddleGraph_1 = utils.middle_graph_generation(centroid_coordinates_1,
-                                                          batch_size=batchSize,
-                                                          M=self.para.clusterNumberL1,
-                                                          K=self.para.nearestNeighborL1)
+            # layer_1: (2)down sampling and pooling
+            IndexL1, Coor_2 = utils.farthest_sampling_new(Coor_1,M=self.para.vertexNumG2,k=self.para.poolNumG1,
+                                                          r=self.para.poolRangeG1,batch_size=batchSize,nodes_n=self.para.vertexNumG1)
 
-            # for down-sampling, generate next layer input
-            IndexL2, centroid_coordinates_2 = utils.farthest_sampling_new(centroid_coordinates_1,
-                                                                          M=self.para.clusterNumberL2,
-                                                                          k=self.para.poolingRangeL1,
-                                                                          batch_size=batchSize,
-                                                                          nodes_n=self.para.clusterNumberL1)
+            # layer_2: (1)graph generate (2)down sampling and pooling
+            Graph_2 = utils.middle_graph_generation(Coor_2,batch_size=batchSize,M=self.para.vertexNumG2,K=self.para.edgeNumG2)
+            IndexL2, Coor_3 = utils.farthest_sampling_new(Coor_2,M=self.para.vertexNumG3,k=self.para.poolNumG2,
+                                                          r=self.para.poolRangeG2,batch_size=batchSize,nodes_n=self.para.vertexNumG2)
 
-            #  using layer input to generate graph
-            MiddleGraph_2 = utils.middle_graph_generation(centroid_coordinates_2,
-                                                          batch_size=batchSize,
-                                                          M=self.para.clusterNumberL2,
-                                                          K=self.para.nearestNeighborL2)
-
-            # # for down-sampling, generate next layer input
-            IndexL3, centroid_coordinates_3 = utils.farthest_sampling_new(centroid_coordinates_2,
-                                                                          M=self.para.clusterNumberL3,
-                                                                          k=self.para.poolingRangeL2,
-                                                                          batch_size=batchSize,
-                                                                          nodes_n=self.para.clusterNumberL2)
-
-            # # using layer input to generate graph
-            # MiddleGraph_3 = utils.middle_graph_generation(centroid_coordinates_3,
-            #                                               batch_size=batchSize,
-            #                                               M=self.para.clusterNumberL3,
-            #                                               K=self.para.nearestNeighborL3)
+            # layer_3: (1)graph generate (2)down sampling and pooling
+            Graph_3 = utils.middle_graph_generation(Coor_3,batch_size=batchSize,M=self.para.vertexNumG3,K=self.para.edgeNumG3)
+            IndexL3, Coor_4 = utils.farthest_sampling_new(Coor_3,M=self.para.vertexNumG4,k=self.para.poolNumG3,
+                                                          r=self.para.poolRangeG3,batch_size=batchSize,nodes_n=self.para.vertexNumG3)
 
             feed_dict = {self.placeholder['isTraining']: True,
                          self.placeholder['batch_size']: batchSize,
-                         self.placeholder['coordinate']: batchSCoor,
+                         self.placeholder['coordinate']: SCoor_1 if self.para.useSphericalPos else Coor_1,
                          self.placeholder['label']: batchLabel,
                          self.placeholder['weights']: batchWeight,
-                         self.placeholder['graph_1']: batchGraph,       #for 1st gcn layer graph
-                         self.placeholder['batch_index_l1']: IndexL1,   #for 1st pooling layer
-                         self.placeholder['graph_2']: MiddleGraph_1,    #for 2st gcn layer graph
-                         self.placeholder['batch_index_l2']: IndexL2,   #for 2st pooling layer
-                         self.placeholder['graph_3']: MiddleGraph_2,    #for 3st gcn layer graph
-                         self.placeholder['batch_index_l3']: IndexL3,   #for 3st pooling layer
-                         # self.placeholder['graph_4']: MiddleGraph_3     #for 4st gcn layer graph
+                         self.placeholder['graph_1']: Graph_1,       #for 1st gcn layer graph
+                         self.placeholder['poolIndex_1']: IndexL1,   #for 1st pooling layer
+                         self.placeholder['graph_2']: Graph_2,    #for 2st gcn layer graph
+                         self.placeholder['poolIndex_2']: IndexL2,   #for 2st pooling layer
+                         self.placeholder['graph_3']: Graph_3,    #for 3st gcn layer graph
+                         self.placeholder['poolIndex_3']: IndexL3,   #for 3st pooling layer
                          }
             opt,summary = self.sess.run(
                 [self.model.opt_op,
@@ -101,7 +77,6 @@ class TopOperate(object):
 
 
     def evaluateOneEpoch(self,eval_dataset,weight_dict):
-        # xTrain, graphTrain, labelTrain = shuffle(self.eval_coor, self.eval_graph, self.eval_label)
         batchSize = self.para.evalBatchSize
         eval_iter = eval_dataset.iter(batchSize)
         batch_count = 0
@@ -110,57 +85,43 @@ class TopOperate(object):
         batchWeight_list = []
         while True:
             try:
-                batchSCoor, batchCoor, batchGraph, batchLabel = next(eval_iter)
+                SCoor_1, Coor_1, Graph_1, batchLabel = next(eval_iter)
             except StopIteration:
                 break
-            batchWeight = utils.weights_calculation(batchLabel, weight_dict)
-            # for down-sampling, generate next layer input
-            IndexL1, centroid_coordinates_1 = utils.farthest_sampling_new(batchCoor,
-                                                                          M=self.para.clusterNumberL1,
-                                                                          k=self.para.poolingRange,
-                                                                          batch_size=batchSize,
-                                                                          nodes_n=self.para.pointNumber)
-            # using layer input to generate graph
-            MiddleGraph_1 = utils.middle_graph_generation(centroid_coordinates_1,
-                                                          batch_size=batchSize,
-                                                          M=self.para.clusterNumberL1,
-                                                          K=self.para.nearestNeighborL1)
+            # 为非均匀数据集加入每种对象类型占比
+            if self.para.weighting_scheme == 'uniform':
+                batchWeight = utils.uniform_weight(batchLabel)
+            elif self.para.weighting_scheme == 'weighted':
+                batchWeight = utils.weights_calculation(batchLabel, weight_dict)
+            else:
+                print('please enter a valid weighting scheme')
+                batchWeight = utils.uniform_weight(batchLabel)
 
-            # for down-sampling, generate next layer input
-            IndexL2, centroid_coordinates_2 = utils.farthest_sampling_new(centroid_coordinates_1,
-                                                                          M=self.para.clusterNumberL2,
-                                                                          k=self.para.poolingRangeL1,
-                                                                          batch_size=batchSize,
-                                                                          nodes_n=self.para.clusterNumberL1)
-            #  using layer input to generate graph
-            MiddleGraph_2 = utils.middle_graph_generation(centroid_coordinates_2,
-                                                          batch_size=batchSize,
-                                                          M=self.para.clusterNumberL2,
-                                                          K=self.para.nearestNeighborL2)
+            # layer_1: (2)down sampling and pooling
+            IndexL1, Coor_2 = utils.farthest_sampling_new(Coor_1, M=self.para.vertexNumG2, k=self.para.poolNumG1,
+                                                          r=self.para.poolRangeG1, batch_size=batchSize, nodes_n=self.para.vertexNumG1)
 
-            # # for down-sampling, generate next layer input
-            IndexL3, centroid_coordinates_3 = utils.farthest_sampling_new(centroid_coordinates_2,
-                                                                          M=self.para.clusterNumberL3,
-                                                                          k=self.para.poolingRangeL2,
-                                                                          batch_size=batchSize,
-                                                                          nodes_n=self.para.clusterNumberL2)
-            #
-            # # using layer input to generate graph
-            # MiddleGraph_3 = utils.middle_graph_generation(centroid_coordinates_3,
-            #                                               batch_size=batchSize,
-            #                                               M=self.para.clusterNumberL3,
-            #                                               K=self.para.nearestNeighborL3)
+            # layer_2: (1)graph generate (2)down sampling and pooling
+            Graph_2 = utils.middle_graph_generation(Coor_2, batch_size=batchSize, M=self.para.vertexNumG2,
+                                                    K=self.para.edgeNumG2)
+            IndexL2, Coor_3 = utils.farthest_sampling_new(Coor_2, M=self.para.vertexNumG3, k=self.para.poolNumG2,
+                                                          r=self.para.poolRangeG2, batch_size=batchSize, nodes_n=self.para.vertexNumG2)
+
+            # layer_3: (1)graph generate (2)down sampling and pooling
+            Graph_3 = utils.middle_graph_generation(Coor_3, batch_size=batchSize, M=self.para.vertexNumG3,
+                                                    K=self.para.edgeNumG3)
+            IndexL3, Coor_4 = utils.farthest_sampling_new(Coor_3, M=self.para.vertexNumG4, k=self.para.poolNumG3,
+                                                          r=self.para.poolRangeG3, batch_size=batchSize, nodes_n=self.para.vertexNumG3)
 
             feed_dict = {self.placeholder['isTraining']: False,
                          self.placeholder['batch_size']: batchSize,
-                         self.placeholder['coordinate']: batchSCoor,
-                         self.placeholder['graph_1']: batchGraph,       #for 1st gcn layer graph
-                         self.placeholder['batch_index_l1']: IndexL1,   #for 1st pooling layer
-                         self.placeholder['graph_2']: MiddleGraph_1,    #for 2st gcn layer graph
-                         self.placeholder['batch_index_l2']: IndexL2,   #for 2st pooling layer
-                         self.placeholder['graph_3']: MiddleGraph_2,    #for 3st gcn layer graph
-                         self.placeholder['batch_index_l3']: IndexL3,   #for 3st pooling layer
-                         # self.placeholder['graph_4']: MiddleGraph_3     #for 4st gcn layer graph
+                         self.placeholder['coordinate']: SCoor_1 if self.para.useSphericalPos else Coor_1,
+                         self.placeholder['graph_1']: Graph_1,  # for 1st gcn layer graph
+                         self.placeholder['poolIndex_1']: IndexL1,  # for 1st pooling layer
+                         self.placeholder['graph_2']: Graph_2,  # for 2st gcn layer graph
+                         self.placeholder['poolIndex_2']: IndexL2,  # for 2st pooling layer
+                         self.placeholder['graph_3']: Graph_3,  # for 3st gcn layer graph
+                         self.placeholder['poolIndex_3']: IndexL3,  # for 3st pooling layer
                          }
 
             probability = self.sess.run(
@@ -192,60 +153,40 @@ class TopOperate(object):
         np.savez(self.para.evalDir+'eval_epoch_'+str(self.epoch_count-1)+'.npz',confusion_matrix=confusion_matrix,accuracy=accuracy,precision=precision,recall=recall,f1=f1,fpr=fpr,tpr=tpr,auc=auc)
 
 
-
     def predictOneData(self, data):
-        coordinate, graph, label = data[0], data[1], data[2]
+        Coor_1, graph, label = data[0], data[1], data[2]
         batchSize = self.para.testBatchSize
-        graph = graph.todense()
-        coordinate = utils.get_Spherical_coordinate(coordinate)
+        Graph_1 = graph.todense()
+        SCoor_1 = utils.get_Spherical_coordinate(Coor_1)
 
-        # for down-sampling, generate next layer input
-        IndexL1, centroid_coordinates_1 = utils.farthest_sampling_new(coordinate,
-                                                                    M = self.para.clusterNumberL1,
-                                                                    k = self.para.poolingRange,
-                                                                    batch_size = batchSize,
-                                                                    nodes_n = self.para.pointNumber)
-        # using layer input to generate graph
-        MiddleGraph_1 = utils.middle_graph_generation(centroid_coordinates_1,
-                                                      batch_size = batchSize,
-                                                      M = self.para.clusterNumberL1,
-                                                      K = self.para.nearestNeighborL1)
+        # layer_1: (2)down sampling and pooling
+        IndexL1, Coor_2 = utils.farthest_sampling_new(Coor_1, M=self.para.vertexNumG2, k=self.para.poolNumG1,
+                                                      r=self.para.poolRangeG1, batch_size=batchSize,
+                                                      nodes_n=self.para.vertexNumG1)
 
-        # for down-sampling, generate next layer input
-        IndexL2, centroid_coordinates_2 = utils.farthest_sampling_new(centroid_coordinates_1,
-                                                                    M = self.para.clusterNumberL2,
-                                                                    k = self.para.poolingRangeL1,
-                                                                    batch_size = batchSize,
-                                                                    nodes_n = self.para.clusterNumberL1)
-        #  using layer input to generate graph
-        MiddleGraph_2 = utils.middle_graph_generation(centroid_coordinates_2,
-                                                      batch_size = batchSize,
-                                                      M = self.para.clusterNumberL2,
-                                                      K = self.para.nearestNeighborL2)
+        # layer_2: (1)graph generate (2)down sampling and pooling
+        Graph_2 = utils.middle_graph_generation(Coor_2, batch_size=batchSize, M=self.para.vertexNumG2,
+                                                K=self.para.edgeNumG2)
+        IndexL2, Coor_3 = utils.farthest_sampling_new(Coor_2, M=self.para.vertexNumG3, k=self.para.poolNumG2,
+                                                      r=self.para.poolRangeG2, batch_size=batchSize,
+                                                      nodes_n=self.para.vertexNumG2)
 
-        # # for down-sampling, generate next layer input
-        IndexL3, centroid_coordinates_3 = utils.farthest_sampling_new(centroid_coordinates_2,
-                                                                    M = self.para.clusterNumberL3,
-                                                                    k = self.para.poolingRangeL2,
-                                                                    batch_size = batchSize,
-                                                                    nodes_n = self.para.clusterNumberL2)
-        #
-        # # using layer input to generate graph
-        # MiddleGraph_3 = utils.middle_graph_generation(centroid_coordinates_3,
-        #                                               batch_size=batchSize,
-        #                                               M=self.para.clusterNumberL3,
-        #                                               K=self.para.nearestNeighborL3)
+        # layer_3: (1)graph generate (2)down sampling and pooling
+        Graph_3 = utils.middle_graph_generation(Coor_3, batch_size=batchSize, M=self.para.vertexNumG3,
+                                                K=self.para.edgeNumG3)
+        IndexL3, Coor_4 = utils.farthest_sampling_new(Coor_3, M=self.para.vertexNumG4, k=self.para.poolNumG3,
+                                                      r=self.para.poolRangeG3, batch_size=batchSize,
+                                                      nodes_n=self.para.vertexNumG3)
 
         feed_dict = {self.placeholder['isTraining']: False,
                      self.placeholder['batch_size']: batchSize,
-                     self.placeholder['coordinate']: coordinate,
-                     self.placeholder['graph_1']: graph,  # for 1st gcn layer graph
-                     self.placeholder['batch_index_l1']: IndexL1,  # for 1st pooling layer
-                     self.placeholder['graph_2']: MiddleGraph_1,  # for 2st gcn layer graph
-                     self.placeholder['batch_index_l2']: IndexL2,  # for 2st pooling layer
-                     self.placeholder['graph_3']: MiddleGraph_2,  # for 3st gcn layer graph
-                     self.placeholder['batch_index_l3']: IndexL3,  # for 3st pooling layer
-                     # self.placeholder['graph_4']: MiddleGraph_3  # for 4st gcn layer graph
+                     self.placeholder['coordinate']: SCoor_1 if self.para.useSphericalPos else Coor_1,
+                     self.placeholder['graph_1']: Graph_1,  # for 1st gcn layer graph
+                     self.placeholder['poolIndex_1']: IndexL1,  # for 1st pooling layer
+                     self.placeholder['graph_2']: Graph_2,  # for 2st gcn layer graph
+                     self.placeholder['poolIndex_2']: IndexL2,  # for 2st pooling layer
+                     self.placeholder['graph_3']: Graph_3,  # for 3st gcn layer graph
+                     self.placeholder['poolIndex_3']: IndexL3,  # for 3st pooling layer
                      }
 
         probability = self.sess.run(

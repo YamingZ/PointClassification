@@ -51,11 +51,12 @@ def adjacency(dist, idx):
     W.setdiag(0)
 
     # Non-directed graph.
-    bigger = W.T > W
-    W = W - W.multiply(bigger) + W.T.multiply(bigger)
+    bigger = W.T > W    #找出不对称部分
+    W = W - W.multiply(bigger) + W.T.multiply(bigger)   #元素相乘
     return W
 
 def normalize_adj(adj):
+    #Symmetric normalized adjacency
     adj = scipy.sparse.coo_matrix(adj)
     rowsum = np.array(adj.sum(1))
     d_inv_sqrt = np.power(rowsum, -0.5).flatten()
@@ -70,6 +71,7 @@ def normalized_laplacian(adj):
 
 def scaled_laplacian(adj):
     adj_normalized = normalize_adj(adj)
+    # L^{sym} = D^{-1/2}LD^{-/2} = I - D^{-1/2}AD^{-1/2}
     laplacian = scipy.sparse.eye(adj.shape[0]) - adj_normalized
     largest_eigval, _ = scipy.sparse.linalg.eigsh(laplacian, 1, which='LM')
     scaled_laplacian = (2. / largest_eigval[0]) * laplacian - scipy.sparse.eye(adj.shape[0])
@@ -206,9 +208,12 @@ def farthest_sampling_only(original_coor,M):
         batch_centroid_points[j] = select_coor.flatten()
     return batch_centroid_points
 
-def farthest_sampling_new(batch_original_coor, M, k, batch_size, nodes_n):
-    # input    1) coordinate (B,N*3) 2) input features B*N*n1
-    #          3)M centroid point number(cluster number) 4) k nearest neighbor number
+def farthest_sampling_new(batch_original_coor, M, k, r, batch_size, nodes_n):
+    # input    1) coordinate (B,N*3)
+    #          2) input features B*N*n1
+    #          3) M centroid point number(cluster number)
+    #          4) k nearest neighbor number
+    #          5) distance upper bound
     # output:  1) batch index (B, M*k)
     #          2) centroid points (B, M*3)
     batch_object_coor = batch_original_coor.reshape([batch_size, nodes_n, 3])  # (28,1024,3)
@@ -217,7 +222,7 @@ def farthest_sampling_new(batch_original_coor, M, k, batch_size, nodes_n):
     for j in range(batch_size):
         pc_object_coor = batch_object_coor[j]
         # calculate pair wise distance
-        random.seed(1)
+        # random.seed(1)
         initial_index = random.randint(0, nodes_n-1)
         initial_point = pc_object_coor[initial_index]
         initial_point = initial_point[np.newaxis,:]
@@ -244,7 +249,7 @@ def farthest_sampling_new(batch_original_coor, M, k, batch_size, nodes_n):
         
         select_coor = pc_object_coor[solution_set]
         tree = cKDTree(pc_object_coor)
-        dd, ii = tree.query(select_coor, k=k)
+        dd, ii = tree.query(select_coor, k=k, distance_upper_bound=r)
         index_select = ii.flatten()
         batch_centroid_points[j] = select_coor.flatten()
         batch_index[j] = index_select

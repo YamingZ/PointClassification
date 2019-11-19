@@ -63,11 +63,10 @@ class DataSets(object):
 if __name__ =='__main__':
     import read_data
     from parameters import *
-    import random
-    import time
+
 
     para = Parameters()
-    inputTrain, trainLabel, inputTest, testLabel = read_data.load_data(para.pointNumber, para.samplingType,
+    inputTrain, trainLabel, inputTest, testLabel = read_data.load_data(para.VertexNumG1, para.samplingType,
                                                                        para.dataDir)
     scaledLaplacianTrain, scaledLaplacianTest = read_data.prepareData(inputTrain, inputTest, para.neighborNumber,
                                                                       para.pointNumber, para.dataDir)
